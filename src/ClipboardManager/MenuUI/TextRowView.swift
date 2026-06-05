@@ -69,12 +69,14 @@ final class TextRowView: NSView {
         deleteButton.toolTip = "Delete"
         deleteButton.setContentHuggingPriority(.required, for: .horizontal)
 
-        let rowStack = NSStackView(views: [previewLabel, favoriteButton, deleteButton])
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let rowStack = NSStackView(views: [previewLabel, spacer, favoriteButton, deleteButton])
         rowStack.orientation = .horizontal
         rowStack.alignment = .centerY
         rowStack.spacing = 8
         rowStack.translatesAutoresizingMaskIntoConstraints = false
-        rowStack.setHuggingPriority(.defaultLow, for: .horizontal)
         addSubview(rowStack)
 
         NSLayoutConstraint.activate([

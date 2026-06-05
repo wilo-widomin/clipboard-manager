@@ -95,7 +95,10 @@ final class ImageRowView: NSView {
         deleteButton.toolTip = "Delete"
         deleteButton.setContentHuggingPriority(.required, for: .horizontal)
 
-        let rowStack = NSStackView(views: [imageView, favoriteButton, deleteButton])
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let rowStack = NSStackView(views: [imageView, spacer, favoriteButton, deleteButton])
         rowStack.orientation = .horizontal
         rowStack.alignment = .centerY
         rowStack.spacing = 10
