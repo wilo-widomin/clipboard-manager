@@ -68,6 +68,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 self.store.viewMode = .images
                 self.rebuildMenu()
             },
+            select: { [weak self] item in
+                guard let self = self else { return }
+                switch item.contentType {
+                case .text:
+                    if let text = item.textContent {
+                        PasteboardHelper.copyAndPaste(text: text)
+                    }
+                case .image:
+                    if let image = item.loadImage() {
+                        PasteboardHelper.copyAndPaste(image: image)
+                    }
+                }
+            },
             toggleFavorite: { [weak self] id in
                 self?.store.toggleFavorite(id: id)
                 self?.rebuildMenuIfOpen()

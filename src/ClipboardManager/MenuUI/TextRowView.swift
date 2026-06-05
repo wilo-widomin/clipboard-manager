@@ -16,6 +16,7 @@ final class TextRowView: NSView {
 
     var onToggleFavorite: (() -> Void)?
     var onDelete: (() -> Void)?
+    var onSelect: (() -> Void)?
 
     private let previewLabel = NSTextField(labelWithString: "")
     private let favoriteButton = NSButton()
@@ -108,13 +109,13 @@ final class TextRowView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
-        // Try delete button first, then favorite, then pass through.
+        // Try delete button first, then favorite, then select (copy + paste).
         if deleteButton.frame.contains(location) {
             deleteButton.mouseDown(with: event)
         } else if favoriteButton.frame.contains(location) {
             favoriteButton.mouseDown(with: event)
         } else {
-            super.mouseDown(with: event)
+            onSelect?()
         }
     }
 }

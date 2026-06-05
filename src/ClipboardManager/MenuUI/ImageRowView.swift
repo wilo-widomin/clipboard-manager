@@ -17,6 +17,7 @@ final class ImageRowView: NSView {
 
     var onToggleFavorite: (() -> Void)?
     var onDelete: (() -> Void)?
+    var onSelect: (() -> Void)?
 
     private let imageView = NSImageView()
     private let favoriteButton = NSButton()
@@ -65,11 +66,6 @@ final class ImageRowView: NSView {
         imageView.layer?.cornerRadius = 4
         imageView.layer?.masksToBounds = true
         imageView.imageScaling = .scaleProportionallyUpOrDown
-
-        // Make the image view clickable for Quick Look.
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(imageClicked))
-        imageView.addGestureRecognizer(clickGesture)
-        imageView.isEnabled = true
 
         NSLayoutConstraint.activate([
             imageView.widthAnchor.constraint(equalToConstant: Self.thumbnailSize),
@@ -153,8 +149,7 @@ final class ImageRowView: NSView {
         } else if favoriteButton.frame.contains(location) {
             favoriteButton.mouseDown(with: event)
         } else {
-            // Forward to imageView for the click gesture.
-            imageView.mouseDown(with: event)
+            onSelect?()
         }
     }
 }

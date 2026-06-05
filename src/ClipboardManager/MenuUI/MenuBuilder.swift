@@ -12,6 +12,7 @@ import AppKit
 struct MenuActions {
     let switchToText: () -> Void
     let switchToImages: () -> Void
+    let select: (ClipboardItem) -> Void
     let toggleFavorite: (ClipboardItem.ID) -> Void
     let delete: (ClipboardItem.ID) -> Void
     let quit: () -> Void
@@ -84,6 +85,7 @@ struct MenuBuilder {
             let rowView = TextRowView(item: item)
             rowView.onToggleFavorite = { actions.toggleFavorite(item.id) }
             rowView.onDelete = { actions.delete(item.id) }
+            rowView.onSelect = { actions.select(item) }
 
             let menuItem = NSMenuItem()
             menuItem.view = rowView
@@ -114,6 +116,7 @@ struct MenuBuilder {
             let rowView = ImageRowView(item: item)
             rowView.onToggleFavorite = { actions.toggleFavorite(item.id) }
             rowView.onDelete = { actions.delete(item.id) }
+            rowView.onSelect = { actions.select(item) }
 
             let menuItem = NSMenuItem()
             menuItem.view = rowView
