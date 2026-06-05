@@ -35,7 +35,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private func configureButton() {
         guard let button = statusItem.button else { return }
-        let image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "Clipboard Manager")
+        // "doc.on.clipboard" está disponible desde macOS 11+
+        let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Manager")
+            ?? NSImage(systemSymbolName: "list.clipboard", accessibilityDescription: "Clipboard Manager")
         image?.isTemplate = true
         button.image = image
         button.imagePosition = .imageLeading
