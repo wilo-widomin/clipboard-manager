@@ -10,6 +10,7 @@
 import AppKit
 
 @main
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private lazy var store: ClipboardStore = {

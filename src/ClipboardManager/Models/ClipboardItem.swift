@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import AppKit  // for NSImage used by loadImage()
 
 /// The type of content stored in a clipboard item.
 public enum ClipboardContentType: String, Codable, Sendable {
