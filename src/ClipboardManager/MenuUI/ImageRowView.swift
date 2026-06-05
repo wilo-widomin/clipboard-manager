@@ -22,8 +22,14 @@ final class ImageRowView: NSView {
     private let favoriteButton = NSButton()
     private let deleteButton = NSButton()
 
-    /// The image data to pass to Quick Look.
-    private var imageData: Data?
+    /// Loads the image from the file path stored in the model.
+    private var itemImage: NSImage? {
+        guard let item else { return nil }
+        return item.loadImage()
+    }
+
+    /// The model item this row represents. Used to load the image from its file.
+    private var item: ClipboardItem?
 
     private static let rowWidth: CGFloat = 300
     private static let horizontalInset: CGFloat = 12
@@ -31,7 +37,7 @@ final class ImageRowView: NSView {
 
     init(item: ClipboardItem) {
         self.itemID = item.id
-        self.imageData = item.imageData
+        self.item = item
         super.init(frame: NSRect(x: 0, y: 0, width: Self.rowWidth, height: 96))
         setupSubviews()
         update(with: item)
@@ -43,7 +49,8 @@ final class ImageRowView: NSView {
     }
 
     func update(with item: ClipboardItem) {
-        if let data = item.imageData, let image = NSImage(data: data) {
+        self.item = item
+        if let image = item.loadImage() {
             imageView.image = image
         }
         updateFavoriteIcon(isFavorite: item.isFavorite)
@@ -121,16 +128,13 @@ final class ImageRowView: NSView {
     }
 
     @objc private func imageClicked() {
-        guard let data = imageData else { return }
+        guard let url = item?.imageFileURL else { return }
 
-        // Write to a temp file and open with Quick Look.
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("clipboard-preview-\(itemID.uuidString).png")
+        // Open the image file with Quick Look (qlmanage).
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/qlmanage")
+        process.arguments = ["-p", url.path]
         do {
-            try data.write(to: tempURL)
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/qlmanage")
-            process.arguments = ["-p", tempURL.path]
             try process.run()
         } catch {
             NSLog("ClipboardManager: failed to open Quick Look: \(error)")

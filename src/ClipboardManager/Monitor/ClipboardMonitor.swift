@@ -33,13 +33,15 @@ public final class ClipboardMonitor {
         readPasteboard()
     }
 
+    /// Limit image size to ~10 MB to avoid bloating the store.
+    private static let maxImageSize = 10_000_000
+
     private func readPasteboard() {
         // Try to read a TIFF image first (most common image pasteboard type).
         if let tiffData = pasteboard.data(forType: .tiff),
            let bitmap = NSBitmapImageRep(data: tiffData),
            let pngData = bitmap.representation(using: .png, properties: [.compressionFactor: 0.8]) {
-            // Limit image size to ~10 MB to avoid bloating the JSON store.
-            guard pngData.count < 10_000_000 else { return }
+            guard pngData.count < Self.maxImageSize else { return }
             let item = ClipboardItem.image(pngData: pngData)
             store.add(item)
             return
@@ -47,7 +49,7 @@ public final class ClipboardMonitor {
 
         // Try PNG directly (some apps copy PNG data).
         if let pngData = pasteboard.data(forType: .png) {
-            guard pngData.count < 10_000_000 else { return }
+            guard pngData.count < Self.maxImageSize else { return }
             let item = ClipboardItem.image(pngData: pngData)
             store.add(item)
             return

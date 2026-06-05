@@ -23,6 +23,10 @@ public enum ClipboardViewMode: String, Codable, Sendable {
 @MainActor
 public final class ClipboardStore: ObservableObject {
 
+    // Separate limits per content type.
+    private let maxTextItems = 100
+    private let maxImageItems = 20
+
     /// All items, ordered: favourites first (by date desc), then rest (by date desc).
     @Published public private(set) var items: [ClipboardItem] = []
 
@@ -58,28 +62,47 @@ public final class ClipboardStore: ObservableObject {
 
     // MARK: - Mutations
 
-    /// Adds a new item, enforcing the max count (oldest non-favourite drops).
+    /// Adds a new item, enforcing the per-type max count (oldest non-favourite drops).
     public func add(_ item: ClipboardItem) {
         var newItems = items + [item]
-        if newItems.count > maxItems {
-            // Drop the oldest non-favourite item.
+        if newItems.count > maxCount(for: item.contentType) {
+            // Drop the oldest non-favourite item of the same type.
             let oldestNonFav = newItems
-                .filter { !$0.isFavorite }
+                .filter { $0.contentType == item.contentType && !$0.isFavorite }
                 .sorted { $0.createdAt < $1.createdAt }
                 .first
             if let drop = oldestNonFav {
                 newItems.removeAll { $0.id == drop.id }
+                // Also delete the image file if it was an image.
+                if let filename = drop.imageFilename {
+                    ImageStorage.delete(filename: filename)
+                }
             }
         }
         items = sort(newItems)
         persist()
     }
 
-    /// Removes a single item by id.
+    /// Maximum items allowed for a given content type.
+    private func maxCount(for contentType: ClipboardContentType) -> Int {
+        switch contentType {
+        case .text:  return maxTextItems
+        case .image: return maxImageItems
+        }
+    }
+
+    /// Removes a single item by id. Also deletes the image file from disk
+    /// if the item was an image.
     public func remove(id: ClipboardItem.ID) {
         let before = items.count
+        // Grab the item before removing it so we can clean up its file.
+        let toRemove = items.first { $0.id == id }
         items.removeAll { $0.id == id }
         guard items.count != before else { return }
+        // Delete the image file if applicable.
+        if let filename = toRemove?.imageFilename {
+            ImageStorage.delete(filename: filename)
+        }
         persist()
     }
 
@@ -91,11 +114,18 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
-    /// Clears all non-favourite items.
+    /// Clears all non-favourite items. Also deletes their image files from disk.
     public func clearNonFavorites() {
         let before = items.count
+        let removed = items.filter { !$0.isFavorite }
         items = items.filter { $0.isFavorite }
         guard items.count != before else { return }
+        // Delete image files of removed items.
+        for item in removed {
+            if let filename = item.imageFilename {
+                ImageStorage.delete(filename: filename)
+            }
+        }
         persist()
     }
 
