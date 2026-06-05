@@ -89,6 +89,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 self?.store.remove(id: id)
                 self?.rebuildMenuIfOpen()
             },
+            about: {
+                AboutWindowController.show()
+            },
             quit: { NSApp.terminate(nil) }
         )
     }

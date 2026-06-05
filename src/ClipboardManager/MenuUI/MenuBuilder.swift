@@ -15,6 +15,7 @@ struct MenuActions {
     let select: (ClipboardItem) -> Void
     let toggleFavorite: (ClipboardItem.ID) -> Void
     let delete: (ClipboardItem.ID) -> Void
+    let about: () -> Void
     let quit: () -> Void
 }
 
@@ -59,6 +60,7 @@ struct MenuBuilder {
         }
 
         menu.addItem(.separator())
+        menu.addItem(BlockMenuItem(title: "About Clipboard Manager", keyEquivalent: "", handler: actions.about))
         menu.addItem(BlockMenuItem(title: "Quit Clipboard Manager", keyEquivalent: "q", handler: actions.quit))
 
         return (textRows, imageRows)
