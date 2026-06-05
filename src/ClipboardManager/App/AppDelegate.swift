@@ -10,7 +10,26 @@
 import AppKit
 
 @main
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    /// Programmatic entry point. We drive the `NSApplication` lifecycle ourselves
+    /// (rather than relying on `NSApplicationMain` / a storyboard) because this is
+    /// a menu-bar agent with no Dock icon and no main window. `application.run()`
+    /// starts the AppKit run loop that keeps the process alive and delivers
+    /// `applicationDidFinishLaunching` — without it the process exits immediately
+    /// and the status item is never installed.
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = AppDelegate()
+        application.delegate = delegate
+
+        // Reinforce LSUIElement=YES at runtime: run as an accessory (menu-bar)
+        // app with no Dock presence and no application menu in the menu bar.
+        application.setActivationPolicy(.accessory)
+
+        application.run()
+    }
 
     private var store: ClipboardStore?
     private var monitor: ClipboardMonitor?
@@ -43,5 +62,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         tickTimer?.invalidate()
+    }
+
+    /// Opt in to secure state restoration (silences the macOS 14+ warning).
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
+        true
     }
 }
