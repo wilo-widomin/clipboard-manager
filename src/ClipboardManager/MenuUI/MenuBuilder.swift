@@ -36,23 +36,13 @@ struct MenuBuilder {
         menu.removeAllItems()
         menu.autoenablesItems = false
 
-        // --- View selector (submenu) ---
-        let viewMenu = NSMenu()
-        let textItem = NSMenuItem(title: "Text", action: #selector(MenuActionTarget.switchToText(_:)), keyEquivalent: "1")
-        textItem.state = viewMode == .text ? .on : .off
-        textItem.target = MenuActionTarget.shared
-        MenuActionTarget.shared.switchToText = actions.switchToText
-        viewMenu.addItem(textItem)
-
-        let imagesItem = NSMenuItem(title: "Images", action: #selector(MenuActionTarget.switchToImages(_:)), keyEquivalent: "2")
-        imagesItem.state = viewMode == .images ? .on : .off
-        imagesItem.target = MenuActionTarget.shared
-        MenuActionTarget.shared.switchToImages = actions.switchToImages
-        viewMenu.addItem(imagesItem)
-
-        let viewSubmenu = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
-        viewSubmenu.submenu = viewMenu
-        menu.addItem(viewSubmenu)
+        // --- View selector (custom row: Text | Images) ---
+        let selectorRow = ViewSelectorRow(selectedView: viewMode)
+        selectorRow.onSelectText = actions.switchToText
+        selectorRow.onSelectImages = actions.switchToImages
+        let selectorItem = NSMenuItem()
+        selectorItem.view = selectorRow
+        menu.addItem(selectorItem)
 
         menu.addItem(.separator())
 
@@ -132,17 +122,6 @@ struct MenuBuilder {
         }
         return rows
     }
-}
-
-/// Helper class to receive action messages from NSMenuItems with state.
-@MainActor
-final class MenuActionTarget: NSObject {
-    static let shared = MenuActionTarget()
-    var switchToText: (() -> Void)?
-    var switchToImages: (() -> Void)?
-
-    @objc func switchToText(_ sender: Any?) { switchToText?() }
-    @objc func switchToImages(_ sender: Any?) { switchToImages?() }
 }
 
 /// An NSMenuItem that calls a block when selected.

@@ -30,8 +30,12 @@ public final class ClipboardStore: ObservableObject {
     /// All items, ordered: favourites first (by date desc), then rest (by date desc).
     @Published public private(set) var items: [ClipboardItem] = []
 
-    /// Which view the menu should show.
-    @Published public var viewMode: ClipboardViewMode = .text
+    /// Which view the menu should show. Persisted in UserDefaults.
+    @Published public var viewMode: ClipboardViewMode = .text {
+        didSet {
+            UserDefaults.standard.set(viewMode.rawValue, forKey: "viewMode")
+        }
+    }
 
     /// Items filtered by the current view mode.
     public var visibleItems: [ClipboardItem] {
@@ -47,6 +51,11 @@ public final class ClipboardStore: ObservableObject {
 
     public init(persistence: PersistenceService) {
         self.persistence = persistence
+        // Restore persisted view mode preference.
+        if let raw = UserDefaults.standard.string(forKey: "viewMode"),
+           let mode = ClipboardViewMode(rawValue: raw) {
+            self.viewMode = mode
+        }
     }
 
     // MARK: - Loading
