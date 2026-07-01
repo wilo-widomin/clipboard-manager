@@ -64,11 +64,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             guard let self = self else { return }
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             // Ignore our own activations (e.g. when the menu-bar item is clicked).
-            guard app.processIdentifier != NSRunningApplication.current.processIdentifier else {
-                ClipboardMonitor.debugLog("focus: activated SELF (ignored)")
-                return
-            }
-            ClipboardMonitor.debugLog("focus: activated \(app.localizedName ?? "?")")
+            guard app.processIdentifier != NSRunningApplication.current.processIdentifier else { return }
             self.focusHistory.append(FocusEvent(app: app, at: Date()))
             // Keep the history short — we only ever look back a couple of entries.
             if self.focusHistory.count > 8 {
@@ -119,7 +115,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 // Use the target fixed at menu-open time, not the live focus —
                 // by now our own app is frontmost and any later activation is noise.
                 let target = self.pasteTarget
-                ClipboardMonitor.debugLog("select: clicked item type=\(item.contentType) — paste starting (target=\(target?.localizedName ?? "nil"))")
                 // Dismiss the menu via its known instance so key focus returns
                 // to the previously active app before Cmd+V is posted.
                 self.menu.cancelTracking()
@@ -171,7 +166,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
         pasteTarget = resolvePasteTarget()
-        ClipboardMonitor.debugLog("menuWillOpen: pasteTarget=\(pasteTarget?.localizedName ?? "nil")")
     }
 
     /// Picks the app to paste into when the menu opens. Skips any activation that
@@ -183,10 +177,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // Walk newest→oldest; take the first activation that is NOT the phantom
         // (i.e. older than the phantom window) and whose app is still running.
         for event in focusHistory.reversed() {
-            if now.timeIntervalSince(event.at) < Self.phantomWindow {
-                ClipboardMonitor.debugLog("resolve: skip phantom \(event.app.localizedName ?? "?") (\(String(format: "%.2f", now.timeIntervalSince(event.at)))s ago)")
-                continue
-            }
+            if now.timeIntervalSince(event.at) < Self.phantomWindow { continue }
             if event.app.isTerminated { continue }
             return event.app
         }

@@ -40,12 +40,7 @@ enum PasteboardHelper {
     /// posts Cmd+V. Without the explicit reactivation, closing the menu leaves
     /// key focus on our own (menu-bar) app and the paste goes nowhere.
     private static func pasteAfterReactivating(_ target: NSRunningApplication?) {
-        if let target = target {
-            target.activate(options: [])
-            ClipboardMonitor.debugLog("paste: reactivated \(target.localizedName ?? "?")")
-        } else {
-            ClipboardMonitor.debugLog("paste: no target app to reactivate")
-        }
+        target?.activate(options: [])
         DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
             postCmdV()
         }
@@ -53,25 +48,15 @@ enum PasteboardHelper {
 
     /// Posts a Cmd+V keystroke to the HID event stream.
     private static func postCmdV() {
-        // Ground truth: is THIS running binary actually trusted for Accessibility?
-        // If this logs `false`, the permission you granted is bound to a different
-        // binary/signature than the one running — posting the keystroke will be
-        // silently swallowed by the system no matter what.
-        let trusted = AXIsProcessTrusted()
-        ClipboardMonitor.debugLog("paste: AXIsProcessTrusted=\(trusted)")
-
-        guard trusted else {
-            // Trigger the system prompt so the user can grant it to *this* binary.
+        // The paste keystroke is silently swallowed unless this binary is trusted
+        // for Accessibility. If it isn't, prompt the user to grant it and bail.
+        guard AXIsProcessTrusted() else {
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
             _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
-            ClipboardMonitor.debugLog("paste: NOT trusted — prompted; aborting Cmd+V")
             return
         }
 
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
-            ClipboardMonitor.debugLog("paste: CGEventSource nil — aborting")
-            return
-        }
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
 
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
         keyDown?.flags = .maskCommand
@@ -81,6 +66,5 @@ enum PasteboardHelper {
 
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
-        ClipboardMonitor.debugLog("paste: posted Cmd+V")
     }
 }
