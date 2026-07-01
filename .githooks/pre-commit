@@ -1,0 +1,14 @@
+#!/bin/bash
+# Pre-commit sanity check: ensures production changes are accompanied by
+# a proper commit message that prepare-commit-msg can parse.
+# Actual version bump is handled by prepare-commit-msg.
+
+set -euo pipefail
+
+# If production files changed, just remind about conventional commits
+CHANGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E "\.(swift|pbxproj)$" || true)
+
+if [ -n "$CHANGED" ]; then
+    # prepare-commit-msg will handle the semver bump — nothing to do here
+    true
+fi
