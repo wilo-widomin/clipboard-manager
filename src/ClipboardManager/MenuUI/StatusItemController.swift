@@ -70,6 +70,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             },
             select: { [weak self] item in
                 guard let self = self else { return }
+                // Dismiss the menu via its known instance so key focus returns
+                // to the previously active app before Cmd+V is posted.
+                self.menu.cancelTracking()
                 switch item.contentType {
                 case .text:
                     if let text = item.textContent {
