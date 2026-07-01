@@ -42,7 +42,25 @@ enum PasteboardHelper {
 
     /// Posts a Cmd+V keystroke to the HID event stream.
     private static func postCmdV() {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        // Ground truth: is THIS running binary actually trusted for Accessibility?
+        // If this logs `false`, the permission you granted is bound to a different
+        // binary/signature than the one running — posting the keystroke will be
+        // silently swallowed by the system no matter what.
+        let trusted = AXIsProcessTrusted()
+        ClipboardMonitor.debugLog("paste: AXIsProcessTrusted=\(trusted)")
+
+        guard trusted else {
+            // Trigger the system prompt so the user can grant it to *this* binary.
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+            _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
+            ClipboardMonitor.debugLog("paste: NOT trusted — prompted; aborting Cmd+V")
+            return
+        }
+
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            ClipboardMonitor.debugLog("paste: CGEventSource nil — aborting")
+            return
+        }
 
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
         keyDown?.flags = .maskCommand
@@ -52,5 +70,6 @@ enum PasteboardHelper {
 
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
+        ClipboardMonitor.debugLog("paste: posted Cmd+V")
     }
 }
