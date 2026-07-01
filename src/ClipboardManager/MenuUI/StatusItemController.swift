@@ -51,7 +51,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             guard let self = self else { return }
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             // Ignore our own activations (e.g. when the menu-bar item is clicked).
-            guard app.processIdentifier != NSRunningApplication.current.processIdentifier else { return }
+            guard app.processIdentifier != NSRunningApplication.current.processIdentifier else {
+                ClipboardMonitor.debugLog("focus: activated SELF (ignored) — previousApp stays \(self.previousApp?.localizedName ?? "nil")")
+                return
+            }
+            ClipboardMonitor.debugLog("focus: activated \(app.localizedName ?? "?") — now previousApp")
             self.previousApp = app
         }
     }
