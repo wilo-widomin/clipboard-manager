@@ -21,13 +21,26 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var imageRows: MenuBuilder.ImageRows = [:]
     private var isMenuOpen = false
 
-    /// The last app that held focus before ours. We track every app-activation
-    /// system-wide and remember the most recent one that isn't us, because
-    /// `NSWorkspace.frontmostApplication` sampled at menu-open time is wrong on
-    /// multi-display setups (it can report a window on the screen where the menu
-    /// was clicked instead of the app that actually had key focus). We must
-    /// reactivate this app before Cmd+V or the paste lands in the wrong place.
-    private var previousApp: NSRunningApplication?
+    /// Timestamped record of an app becoming active.
+    private struct FocusEvent {
+        let app: NSRunningApplication
+        let at: Date
+    }
+
+    /// Rolling history of the last few non-self app activations, newest last.
+    /// We need history (not a single value) because opening the menu on a
+    /// SECOND display makes macOS activate that display's frontmost app (a
+    /// "phantom" activation) a fraction of a second before the menu opens —
+    /// which would otherwise overwrite the app that actually had key focus.
+    private var focusHistory: [FocusEvent] = []
+
+    /// The paste target chosen once when the menu opens, so later phantom
+    /// activations can't change it mid-interaction.
+    private var pasteTarget: NSRunningApplication?
+
+    /// Activations newer than this (relative to menu-open time) are treated as
+    /// the click-induced phantom and skipped. The real focus is always older.
+    private static let phantomWindow: TimeInterval = 0.4
 
     init(store: ClipboardStore) {
         self.store = store
@@ -52,11 +65,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             // Ignore our own activations (e.g. when the menu-bar item is clicked).
             guard app.processIdentifier != NSRunningApplication.current.processIdentifier else {
-                ClipboardMonitor.debugLog("focus: activated SELF (ignored) — previousApp stays \(self.previousApp?.localizedName ?? "nil")")
+                ClipboardMonitor.debugLog("focus: activated SELF (ignored)")
                 return
             }
-            ClipboardMonitor.debugLog("focus: activated \(app.localizedName ?? "?") — now previousApp")
-            self.previousApp = app
+            ClipboardMonitor.debugLog("focus: activated \(app.localizedName ?? "?")")
+            self.focusHistory.append(FocusEvent(app: app, at: Date()))
+            // Keep the history short — we only ever look back a couple of entries.
+            if self.focusHistory.count > 8 {
+                self.focusHistory.removeFirst(self.focusHistory.count - 8)
+            }
         }
     }
 
@@ -99,7 +116,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             },
             select: { [weak self] item in
                 guard let self = self else { return }
-                let target = self.previousApp
+                // Use the target fixed at menu-open time, not the live focus —
+                // by now our own app is frontmost and any later activation is noise.
+                let target = self.pasteTarget
                 ClipboardMonitor.debugLog("select: clicked item type=\(item.contentType) — paste starting (target=\(target?.localizedName ?? "nil"))")
                 // Dismiss the menu via its known instance so key focus returns
                 // to the previously active app before Cmd+V is posted.
@@ -151,8 +170,29 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
-        // `previousApp` is kept up to date continuously by observeAppActivation();
-        // sampling frontmostApplication here was unreliable on multi-display setups.
+        pasteTarget = resolvePasteTarget()
+        ClipboardMonitor.debugLog("menuWillOpen: pasteTarget=\(pasteTarget?.localizedName ?? "nil")")
+    }
+
+    /// Picks the app to paste into when the menu opens. Skips any activation that
+    /// happened within `phantomWindow` of now, because clicking the status item
+    /// on a second display activates that display's frontmost app just before
+    /// the menu opens — that activation is not the user's real focus.
+    private func resolvePasteTarget() -> NSRunningApplication? {
+        let now = Date()
+        // Walk newest→oldest; take the first activation that is NOT the phantom
+        // (i.e. older than the phantom window) and whose app is still running.
+        for event in focusHistory.reversed() {
+            if now.timeIntervalSince(event.at) < Self.phantomWindow {
+                ClipboardMonitor.debugLog("resolve: skip phantom \(event.app.localizedName ?? "?") (\(String(format: "%.2f", now.timeIntervalSince(event.at)))s ago)")
+                continue
+            }
+            if event.app.isTerminated { continue }
+            return event.app
+        }
+        // Everything was within the phantom window (or empty) — fall back to the
+        // most recent still-running app we saw.
+        return focusHistory.reversed().first(where: { !$0.app.isTerminated })?.app
     }
 
     func menuDidClose(_ menu: NSMenu) {
