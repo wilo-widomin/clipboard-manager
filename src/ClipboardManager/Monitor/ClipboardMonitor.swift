@@ -37,18 +37,14 @@ public final class ClipboardMonitor {
     private static let maxImageSize = 10_000_000
 
     private func readPasteboard() {
-        // Try to read a TIFF image first (most common image pasteboard type).
-        if let tiffData = pasteboard.data(forType: .tiff),
-           let bitmap = NSBitmapImageRep(data: tiffData),
-           let pngData = bitmap.representation(using: .png, properties: [.compressionFactor: 0.8]) {
-            guard pngData.count < Self.maxImageSize else { return }
-            let item = ClipboardItem.image(pngData: pngData)
-            store.add(item)
-            return
-        }
-
-        // Try PNG directly (some apps copy PNG data).
-        if let pngData = pasteboard.data(forType: .png) {
+        // Images first. We use `NSImage(pasteboard:)` rather than reading a raw
+        // `.tiff`/`.png` data type directly: many apps (Preview, browsers, some
+        // screenshot flows) publish images as PDF, file-URLs or *promised* types
+        // for which `data(forType: .tiff)` returns nil, so those images were
+        // silently dropped. `NSImage(pasteboard:)` resolves all of those.
+        if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
+           let image = NSImage(pasteboard: pasteboard),
+           let pngData = Self.pngData(from: image) {
             guard pngData.count < Self.maxImageSize else { return }
             let item = ClipboardItem.image(pngData: pngData)
             store.add(item)
@@ -63,5 +59,12 @@ public final class ClipboardMonitor {
             store.add(item)
             return
         }
+    }
+
+    /// Normalises any `NSImage` to PNG data for on-disk storage.
+    private static func pngData(from image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
     }
 }

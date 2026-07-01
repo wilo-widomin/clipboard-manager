@@ -10,9 +10,6 @@
 import Foundation
 import Combine
 
-/// Maximum number of items retained in the store.
-private let maxItems = 100
-
 /// The current display filter for the menu.
 public enum ClipboardViewMode: String, Codable, Sendable {
     case text
@@ -24,7 +21,7 @@ public enum ClipboardViewMode: String, Codable, Sendable {
 public final class ClipboardStore: ObservableObject {
 
     // Separate limits per content type.
-    private let maxTextItems = 100
+    private let maxTextItems = 50
     private let maxImageItems = 20
 
     /// All items, ordered: favourites first (by date desc), then rest (by date desc).

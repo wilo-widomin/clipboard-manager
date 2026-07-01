@@ -35,12 +35,12 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
 
     // MARK: - Preview helpers
 
-    /// First 30 characters of the text, with ellipsis if truncated.
+    /// First 40 characters of the text, followed by "..." if truncated.
     public var textPreview: String {
         guard let text = textContent else { return "" }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count > 30 {
-            return String(trimmed.prefix(30)) + "…"
+        if trimmed.count > 40 {
+            return String(trimmed.prefix(40)) + "..."
         }
         return trimmed
     }

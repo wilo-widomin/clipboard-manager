@@ -46,6 +46,8 @@ final class TextRowView: NSView {
 
     private func setupSubviews() {
         translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 5
 
         previewLabel.font = .menuFont(ofSize: 0)
         previewLabel.lineBreakMode = .byTruncatingTail
@@ -103,6 +105,39 @@ final class TextRowView: NSView {
 
     @objc private func deleteTapped() {
         onDelete?()
+    }
+
+    // MARK: - Hover (rollover)
+
+    /// Subtle accent-tinted background shown while the pointer is over the row.
+    private static let hoverColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        // `.activeAlways` is required: menus track events in their own run-loop
+        // mode, so the default `.activeInKeyWindow` would never fire here.
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        layer?.backgroundColor = Self.hoverColor
+        NSCursor.pointingHand.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        layer?.backgroundColor = nil
+        NSCursor.arrow.set()
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.pointingHand.set()
     }
 
     // MARK: - Mouse forwarding

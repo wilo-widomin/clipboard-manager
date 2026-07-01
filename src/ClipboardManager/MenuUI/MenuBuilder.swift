@@ -83,7 +83,16 @@ struct MenuBuilder {
         }
 
         var rows: TextRows = [:]
+        var didInsertFavoriteSeparator = false
         for item in filtered {
+            // Items are pre-sorted favourites-first; drop a divider once, at the
+            // boundary between the favourites group and the rest.
+            if !item.isFavorite, !didInsertFavoriteSeparator,
+               filtered.contains(where: { $0.isFavorite }) {
+                menu.addItem(.separator())
+                didInsertFavoriteSeparator = true
+            }
+
             let rowView = TextRowView(item: item)
             rowView.onToggleFavorite = { actions.toggleFavorite(item.id) }
             rowView.onDelete = { actions.delete(item.id) }
@@ -114,7 +123,16 @@ struct MenuBuilder {
         }
 
         var rows: ImageRows = [:]
+        var didInsertFavoriteSeparator = false
         for item in filtered {
+            // Items are pre-sorted favourites-first; drop a divider once, at the
+            // boundary between the favourites group and the rest.
+            if !item.isFavorite, !didInsertFavoriteSeparator,
+               filtered.contains(where: { $0.isFavorite }) {
+                menu.addItem(.separator())
+                didInsertFavoriteSeparator = true
+            }
+
             let rowView = ImageRowView(item: item)
             rowView.onToggleFavorite = { actions.toggleFavorite(item.id) }
             rowView.onDelete = { actions.delete(item.id) }
