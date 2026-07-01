@@ -21,6 +21,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var imageRows: MenuBuilder.ImageRows = [:]
     private var isMenuOpen = false
 
+    /// The app that was frontmost when the menu opened. We must reactivate it
+    /// before posting Cmd+V, otherwise the paste lands nowhere — closing the
+    /// menu alone does NOT reliably return key focus to it.
+    private var previousApp: NSRunningApplication?
+
     init(store: ClipboardStore) {
         self.store = store
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -70,18 +75,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             },
             select: { [weak self] item in
                 guard let self = self else { return }
-                ClipboardMonitor.debugLog("select: clicked item type=\(item.contentType) — paste starting")
+                let target = self.previousApp
+                ClipboardMonitor.debugLog("select: clicked item type=\(item.contentType) — paste starting (target=\(target?.localizedName ?? "nil"))")
                 // Dismiss the menu via its known instance so key focus returns
                 // to the previously active app before Cmd+V is posted.
                 self.menu.cancelTracking()
                 switch item.contentType {
                 case .text:
                     if let text = item.textContent {
-                        PasteboardHelper.copyAndPaste(text: text)
+                        PasteboardHelper.copyAndPaste(text: text, reactivating: target)
                     }
                 case .image:
                     if let image = item.loadImage() {
-                        PasteboardHelper.copyAndPaste(image: image)
+                        PasteboardHelper.copyAndPaste(image: image, reactivating: target)
                     }
                 }
             },
@@ -121,6 +127,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
+        // Remember who had focus so we can hand it back before pasting.
+        previousApp = NSWorkspace.shared.frontmostApplication
     }
 
     func menuDidClose(_ menu: NSMenu) {

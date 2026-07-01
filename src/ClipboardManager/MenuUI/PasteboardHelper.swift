@@ -15,26 +15,37 @@ enum PasteboardHelper {
 
     /// Delay before posting Cmd+V. The menu must fully close and key focus must
     /// return to the previously active app first, otherwise the paste lands in
-    /// the void. 0.05s was too short in practice.
-    private static let pasteDelay: TimeInterval = 0.15
+    /// the void. 0.15s was still too short once the menu closes — reactivating
+    /// the target app needs a beat to take effect.
+    private static let pasteDelay: TimeInterval = 0.25
 
-    /// Copies text to the pasteboard and pastes it at the cursor.
-    static func copyAndPaste(text: String) {
+    /// Copies text to the pasteboard and pastes it into `target` (the app that
+    /// had focus before the menu opened).
+    static func copyAndPaste(text: String, reactivating target: NSRunningApplication?) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
-            postCmdV()
-        }
+        pasteAfterReactivating(target)
     }
 
-    /// Copies an image to the pasteboard and pastes it at the cursor.
-    static func copyAndPaste(image: NSImage) {
+    /// Copies an image to the pasteboard and pastes it into `target`.
+    static func copyAndPaste(image: NSImage, reactivating target: NSRunningApplication?) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.writeObjects([image])
+        pasteAfterReactivating(target)
+    }
 
+    /// Reactivates the previously-focused app, waits for focus to settle, then
+    /// posts Cmd+V. Without the explicit reactivation, closing the menu leaves
+    /// key focus on our own (menu-bar) app and the paste goes nowhere.
+    private static func pasteAfterReactivating(_ target: NSRunningApplication?) {
+        if let target = target {
+            target.activate(options: [])
+            ClipboardMonitor.debugLog("paste: reactivated \(target.localizedName ?? "?")")
+        } else {
+            ClipboardMonitor.debugLog("paste: no target app to reactivate")
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
             postCmdV()
         }
