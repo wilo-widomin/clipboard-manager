@@ -59,33 +59,25 @@ public final class ClipboardStore: ObservableObject {
 
     public func load() async {
         let loaded = await persistence.load()
-        items = sort(loaded)
+        // Enforce the per-type limits on load too, so a store that grew past
+        // the limit under an older build (or a lowered limit) is normalised.
+        items = capAllTypes(sort(loaded))
     }
 
     public func adoptInitialState(_ loaded: [ClipboardItem]) {
-        items = sort(loaded)
+        items = capAllTypes(sort(loaded))
     }
 
     // MARK: - Mutations
 
     /// Adds a new item, enforcing the per-type max count (oldest non-favourite drops).
     public func add(_ item: ClipboardItem) {
-        var newItems = items + [item]
-        if newItems.count > maxCount(for: item.contentType) {
-            // Drop the oldest non-favourite item of the same type.
-            let oldestNonFav = newItems
-                .filter { $0.contentType == item.contentType && !$0.isFavorite }
-                .sorted { $0.createdAt < $1.createdAt }
-                .first
-            if let drop = oldestNonFav {
-                newItems.removeAll { $0.id == drop.id }
-                // Also delete the image file if it was an image.
-                if let filename = drop.imageFilename {
-                    ImageStorage.delete(filename: filename)
-                }
-            }
-        }
-        items = sort(newItems)
+        // Cap only the type we just added; enforce the count *of that type*,
+        // NOT the total across all types (the old bug compared the total item
+        // count against a per-type limit, which deleted a freshly-added image
+        // whenever the store already held more items than the image limit).
+        let capped = cap(items + [item], type: item.contentType)
+        items = sort(capped)
         persist()
     }
 
@@ -95,6 +87,33 @@ public final class ClipboardStore: ObservableObject {
         case .text:  return maxTextItems
         case .image: return maxImageItems
         }
+    }
+
+    /// Drops oldest non-favourite items of `type` until that type is within its
+    /// limit. Deletes the image file of any dropped image item.
+    private func cap(_ list: [ClipboardItem], type: ClipboardContentType) -> [ClipboardItem] {
+        var result = list
+        let limit = maxCount(for: type)
+        while result.filter({ $0.contentType == type }).count > limit {
+            guard let drop = result
+                .filter({ $0.contentType == type && !$0.isFavorite })
+                .min(by: { $0.createdAt < $1.createdAt })
+            else { break }  // only favourites left — keep them
+            result.removeAll { $0.id == drop.id }
+            if let filename = drop.imageFilename {
+                ImageStorage.delete(filename: filename)
+            }
+        }
+        return result
+    }
+
+    /// Applies `cap` to every content type.
+    private func capAllTypes(_ list: [ClipboardItem]) -> [ClipboardItem] {
+        var result = list
+        for type in [ClipboardContentType.text, .image] {
+            result = cap(result, type: type)
+        }
+        return result
     }
 
     /// Removes a single item by id. Also deletes the image file from disk
