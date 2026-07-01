@@ -40,16 +40,16 @@ public final class ClipboardMonitor {
         let types = (pasteboard.types ?? []).map(\.rawValue)
         NSLog("ClipboardManager: pasteboard changed, types=%@", types.description)
 
-        // Images first — try several strategies (see `imagePNG()`), because no
+        // Images first — try several strategies (see `imageData()`), because no
         // single API captures every source (screenshots, Preview, browsers,
         // file-promises all differ).
-        if let pngData = imagePNG() {
-            guard pngData.count < Self.maxImageSize else {
-                NSLog("ClipboardManager: image skipped, too large (%d bytes)", pngData.count)
+        if let data = imageData() {
+            guard data.count < Self.maxImageSize else {
+                NSLog("ClipboardManager: image skipped, too large (%d bytes)", data.count)
                 return
             }
-            NSLog("ClipboardManager: captured image (%d bytes PNG)", pngData.count)
-            store.add(.image(pngData: pngData))
+            NSLog("ClipboardManager: captured image (%d bytes)", data.count)
+            store.add(.image(pngData: data))
             return
         }
 
@@ -65,33 +65,43 @@ public final class ClipboardMonitor {
         NSLog("ClipboardManager: no image or text captured for types=%@", types.description)
     }
 
-    /// Attempts to obtain PNG data for an image on the pasteboard using several
-    /// fallbacks. Returns nil if the pasteboard holds no usable image.
-    private func imagePNG() -> Data? {
+    /// Returns displayable image bytes from the pasteboard, or nil if there is
+    /// no image. Prefers PNG, but **never drops an image just because PNG
+    /// conversion fails** — it falls back to the raw TIFF bytes, which
+    /// `NSImage` renders natively. (A Qt-app TIFF was failing NSBitmapImageRep
+    /// → PNG conversion and getting silently discarded.)
+    private func imageData() -> Data? {
         // 1) Raw PNG data (some apps copy PNG directly).
         if let png = pasteboard.data(forType: .png) {
             NSLog("ClipboardManager: image via raw .png data")
             return png
         }
-        // 2) Raw TIFF data → PNG.
-        if let tiff = pasteboard.data(forType: .tiff),
-           let png = Self.png(fromTIFF: tiff) {
-            NSLog("ClipboardManager: image via raw .tiff data")
-            return png
+        // 2) Raw TIFF data → PNG, or the TIFF itself if conversion fails.
+        if let tiff = pasteboard.data(forType: .tiff) {
+            if let png = Self.png(fromTIFF: tiff) {
+                NSLog("ClipboardManager: image via raw .tiff data (converted to PNG)")
+                return png
+            }
+            NSLog("ClipboardManager: PNG conversion failed; storing raw TIFF (%d bytes)", tiff.count)
+            return tiff
         }
         // 3) NSImage(pasteboard:) — handles PDF, file-URLs and promised types
         //    that the raw data reads above miss.
         if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
            let image = NSImage(pasteboard: pasteboard),
-           let tiff = image.tiffRepresentation,
-           let png = Self.png(fromTIFF: tiff) {
-            NSLog("ClipboardManager: image via NSImage(pasteboard:)")
-            return png
+           let tiff = image.tiffRepresentation {
+            if let png = Self.png(fromTIFF: tiff) {
+                NSLog("ClipboardManager: image via NSImage(pasteboard:) (converted to PNG)")
+                return png
+            }
+            NSLog("ClipboardManager: image via NSImage(pasteboard:) (raw TIFF, %d bytes)", tiff.count)
+            return tiff
         }
+        NSLog("ClipboardManager: imageData found no image in pasteboard")
         return nil
     }
 
-    /// Converts TIFF data to PNG data.
+    /// Converts TIFF data to PNG data. Returns nil if the TIFF can't be decoded.
     private static func png(fromTIFF tiff: Data) -> Data? {
         guard let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
         return bitmap.representation(using: .png, properties: [:])
