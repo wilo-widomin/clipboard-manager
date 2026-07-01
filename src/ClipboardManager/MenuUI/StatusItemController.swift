@@ -21,9 +21,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var imageRows: MenuBuilder.ImageRows = [:]
     private var isMenuOpen = false
 
-    /// The app that was frontmost when the menu opened. We must reactivate it
-    /// before posting Cmd+V, otherwise the paste lands nowhere — closing the
-    /// menu alone does NOT reliably return key focus to it.
+    /// The last app that held focus before ours. We track every app-activation
+    /// system-wide and remember the most recent one that isn't us, because
+    /// `NSWorkspace.frontmostApplication` sampled at menu-open time is wrong on
+    /// multi-display setups (it can report a window on the screen where the menu
+    /// was clicked instead of the app that actually had key focus). We must
+    /// reactivate this app before Cmd+V or the paste lands in the wrong place.
     private var previousApp: NSRunningApplication?
 
     init(store: ClipboardStore) {
@@ -34,6 +37,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         configureButton()
         menu.delegate = self
         statusItem.menu = menu
+        observeAppActivation()
+    }
+
+    /// Continuously records the last non-self app to become active, so we always
+    /// know the true previous focus regardless of displays or menu timing.
+    private func observeAppActivation() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self = self else { return }
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            // Ignore our own activations (e.g. when the menu-bar item is clicked).
+            guard app.processIdentifier != NSRunningApplication.current.processIdentifier else { return }
+            self.previousApp = app
+        }
     }
 
     // MARK: - Status button
@@ -127,8 +147,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
-        // Remember who had focus so we can hand it back before pasting.
-        previousApp = NSWorkspace.shared.frontmostApplication
+        // `previousApp` is kept up to date continuously by observeAppActivation();
+        // sampling frontmostApplication here was unreliable on multi-display setups.
     }
 
     func menuDidClose(_ menu: NSMenu) {
