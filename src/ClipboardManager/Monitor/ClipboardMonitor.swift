@@ -37,18 +37,27 @@ public final class ClipboardMonitor {
     private static let maxImageSize = 10_000_000
 
     private func readPasteboard() {
+        let types = (pasteboard.types ?? []).map(\.rawValue)
+        NSLog("ClipboardManager: pasteboard changed, types=%@", types.description)
+
         // Images first. We use `NSImage(pasteboard:)` rather than reading a raw
         // `.tiff`/`.png` data type directly: many apps (Preview, browsers, some
         // screenshot flows) publish images as PDF, file-URLs or *promised* types
         // for which `data(forType: .tiff)` returns nil, so those images were
         // silently dropped. `NSImage(pasteboard:)` resolves all of those.
-        if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
-           let image = NSImage(pasteboard: pasteboard),
-           let pngData = Self.pngData(from: image) {
-            guard pngData.count < Self.maxImageSize else { return }
-            let item = ClipboardItem.image(pngData: pngData)
-            store.add(item)
-            return
+        if pasteboard.canReadObject(forClasses: [NSImage.self], options: nil) {
+            if let image = NSImage(pasteboard: pasteboard),
+               let pngData = Self.pngData(from: image) {
+                guard pngData.count < Self.maxImageSize else {
+                    NSLog("ClipboardManager: image skipped, too large (%d bytes)", pngData.count)
+                    return
+                }
+                NSLog("ClipboardManager: captured image (%d bytes PNG)", pngData.count)
+                let item = ClipboardItem.image(pngData: pngData)
+                store.add(item)
+                return
+            }
+            NSLog("ClipboardManager: canReadObject(NSImage)=true but NSImage/PNG conversion failed")
         }
 
         // Try plain text.

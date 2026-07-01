@@ -53,6 +53,9 @@ final class ImageRowView: NSView {
         self.item = item
         if let image = item.loadImage() {
             imageView.image = image
+        } else {
+            NSLog("ClipboardManager: failed to load thumbnail for %@ (file: %@)",
+                  item.id.uuidString, item.imageFilename ?? "nil")
         }
         updateFavoriteIcon(isFavorite: item.isFavorite)
     }
@@ -154,7 +157,7 @@ final class ImageRowView: NSView {
         // mode, so the default `.activeInKeyWindow` would never fire here.
         let area = NSTrackingArea(
             rect: .zero,
-            options: [.mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
@@ -163,6 +166,12 @@ final class ImageRowView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         layer?.backgroundColor = Self.hoverColor
+        NSCursor.pointingHand.set()
+    }
+
+    // Menus reset the cursor on every mouse-moved event, so we must reassert
+    // the pointing hand continuously while the pointer travels over the row.
+    override func mouseMoved(with event: NSEvent) {
         NSCursor.pointingHand.set()
     }
 
@@ -184,6 +193,9 @@ final class ImageRowView: NSView {
         } else if favoriteButton.frame.contains(location) {
             favoriteButton.mouseDown(with: event)
         } else {
+            // Dismiss the menu first so key focus returns to the previously
+            // active app before PasteboardHelper posts Cmd+V.
+            enclosingMenuItem?.menu?.cancelTracking()
             onSelect?()
         }
     }

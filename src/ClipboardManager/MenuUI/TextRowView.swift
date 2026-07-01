@@ -119,7 +119,7 @@ final class TextRowView: NSView {
         // mode, so the default `.activeInKeyWindow` would never fire here.
         let area = NSTrackingArea(
             rect: .zero,
-            options: [.mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
@@ -128,6 +128,12 @@ final class TextRowView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         layer?.backgroundColor = Self.hoverColor
+        NSCursor.pointingHand.set()
+    }
+
+    // Menus reset the cursor on every mouse-moved event, so we must reassert
+    // the pointing hand continuously while the pointer travels over the row.
+    override func mouseMoved(with event: NSEvent) {
         NSCursor.pointingHand.set()
     }
 
@@ -150,6 +156,9 @@ final class TextRowView: NSView {
         } else if favoriteButton.frame.contains(location) {
             favoriteButton.mouseDown(with: event)
         } else {
+            // Dismiss the menu first so key focus returns to the previously
+            // active app before PasteboardHelper posts Cmd+V.
+            enclosingMenuItem?.menu?.cancelTracking()
             onSelect?()
         }
     }

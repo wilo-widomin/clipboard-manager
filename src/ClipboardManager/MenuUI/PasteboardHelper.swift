@@ -13,14 +13,18 @@ import CoreGraphics
 @MainActor
 enum PasteboardHelper {
 
+    /// Delay before posting Cmd+V. The menu must fully close and key focus must
+    /// return to the previously active app first, otherwise the paste lands in
+    /// the void. 0.05s was too short in practice.
+    private static let pasteDelay: TimeInterval = 0.15
+
     /// Copies text to the pasteboard and pastes it at the cursor.
     static func copyAndPaste(text: String) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
 
-        // Give the menu time to close before posting the keystroke.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
             postCmdV()
         }
     }
@@ -31,7 +35,7 @@ enum PasteboardHelper {
         pb.clearContents()
         pb.writeObjects([image])
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
             postCmdV()
         }
     }
