@@ -21,7 +21,9 @@ public final class ClipboardMonitor {
     public init(store: ClipboardStore) {
         self.store = store
         self.lastChangeCount = pasteboard.changeCount
-        Self.debugLog("monitor started (changeCount=\(pasteboard.changeCount))")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        Self.debugLog("monitor started — app v\(version) (build \(build)), changeCount=\(pasteboard.changeCount)")
     }
 
     /// Call this once per second (e.g. from a Timer or TickEngine).
