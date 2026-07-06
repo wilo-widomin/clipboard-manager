@@ -137,6 +137,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 self?.store.remove(id: id)
                 self?.rebuildMenuIfOpen()
             },
+            clearText: { [weak self] in
+                self?.store.clearNonFavorites(ofType: .text)
+                self?.rebuildMenuIfOpen()
+            },
+            clearImages: { [weak self] in
+                self?.store.clearNonFavorites(ofType: .image)
+                self?.rebuildMenuIfOpen()
+            },
             about: {
                 AboutWindowController.show()
             },

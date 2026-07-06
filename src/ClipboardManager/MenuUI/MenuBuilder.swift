@@ -15,6 +15,8 @@ struct MenuActions {
     let select: (ClipboardItem) -> Void
     let toggleFavorite: (ClipboardItem.ID) -> Void
     let delete: (ClipboardItem.ID) -> Void
+    let clearText: () -> Void
+    let clearImages: () -> Void
     let about: () -> Void
     let quit: () -> Void
 }
@@ -42,6 +44,10 @@ struct MenuBuilder {
         let selectorRow = ViewSelectorRow(selectedView: viewMode)
         selectorRow.onSelectText = actions.switchToText
         selectorRow.onSelectImages = actions.switchToImages
+        selectorRow.onClearText = actions.clearText
+        selectorRow.onClearImages = actions.clearImages
+        selectorRow.onClearText = actions.clearText
+        selectorRow.onClearImages = actions.clearImages
         let selectorItem = NSMenuItem()
         selectorItem.view = selectorRow
         menu.addItem(selectorItem)

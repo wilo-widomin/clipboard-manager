@@ -194,6 +194,21 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
+    /// Clears all non-favourite items of a single content type, leaving
+    /// favourites and the other type untouched. Deletes any removed image files.
+    public func clearNonFavorites(ofType type: ClipboardContentType) {
+        let removed = items.filter { $0.contentType == type && !$0.isFavorite }
+        guard !removed.isEmpty else { return }
+        let removedIDs = Set(removed.map(\.id))
+        items.removeAll { removedIDs.contains($0.id) }
+        for item in removed {
+            if let filename = item.imageFilename {
+                ImageStorage.delete(filename: filename)
+            }
+        }
+        persist()
+    }
+
     // MARK: - Sorting
 
     /// Favourites first (descending date), then the rest (descending date).
