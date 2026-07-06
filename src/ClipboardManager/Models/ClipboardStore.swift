@@ -72,13 +72,53 @@ public final class ClipboardStore: ObservableObject {
 
     /// Adds a new item, enforcing the per-type max count (oldest non-favourite drops).
     public func add(_ item: ClipboardItem) {
+        var incoming = item
+
+        // Deduplicate: re-copying an item already in the list (e.g. clicking a
+        // row puts it back on the pasteboard, which the monitor then re-reads)
+        // must not create a second copy. Drop the old entry so only one remains;
+        // the new one takes its place at the top (it has the newest date).
+        // Carry over the favourite flag so re-copying a starred item keeps it.
+        if let existing = items.first(where: { isDuplicate($0, of: incoming) }) {
+            incoming.isFavorite = existing.isFavorite
+            purge(id: existing.id)
+        }
+
         // Cap only the type we just added; enforce the count *of that type*,
         // NOT the total across all types (the old bug compared the total item
         // count against a per-type limit, which deleted a freshly-added image
         // whenever the store already held more items than the image limit).
-        let capped = cap(items + [item], type: item.contentType)
+        let capped = cap(items + [incoming], type: incoming.contentType)
         items = sort(capped)
         persist()
+    }
+
+    /// True when two items hold the same content (same text, or same image
+    /// bytes). Favourite flag and creation date are ignored.
+    private func isDuplicate(_ a: ClipboardItem, of b: ClipboardItem) -> Bool {
+        guard a.contentType == b.contentType else { return false }
+        switch a.contentType {
+        case .text:
+            return a.textContent == b.textContent
+        case .image:
+            return imageBytes(a) == imageBytes(b)
+        }
+    }
+
+    /// Reads an image item's bytes from disk for content comparison.
+    private func imageBytes(_ item: ClipboardItem) -> Data? {
+        guard let url = item.imageFileURL else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    /// Removes an item from the list and deletes its image file, without
+    /// triggering a persist (the caller persists after the surrounding change).
+    private func purge(id: ClipboardItem.ID) {
+        let toRemove = items.first { $0.id == id }
+        items.removeAll { $0.id == id }
+        if let filename = toRemove?.imageFilename {
+            ImageStorage.delete(filename: filename)
+        }
     }
 
     /// Maximum items allowed for a given content type.
