@@ -4,8 +4,12 @@ macOS menubar app for clipboard history — text & images, favorites, groups, 10
 
 ## Architecture
 
-- **AppKit** (NSStatusItem, NSMenu) for the menubar
-- **SwiftUI** not used (all views are custom AppKit NSViews for menu compatibility)
+- **AppKit** `NSStatusItem` hosting a **SwiftUI popover** (`NSPopover` + `NSHostingController`).
+  We moved off `NSMenu`: custom rows inside a tracking `NSMenu` can't reliably receive
+  clicks/buttons/right-click/nested menus. In a popover, SwiftUI handles all of that.
+- **Popover behaviour** = `.applicationDefined` (a `.transient` popover can't become key
+  in an inactive LSUIElement app and closes instantly); closed via a global outside-click
+  monitor. Showing it activates the app, so the paste target is captured *before* that.
 - **JSON persistence** via Codable in `~/Library/Application Support/ClipboardManager/store.json`
 - **1 Hz polling** of `NSPasteboard.changeCount` for clipboard monitoring
 - **macOS 13+** minimum target
@@ -27,17 +31,19 @@ src/ClipboardManager/
 ├── Persistence/
 │   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
 ├── MenuUI/
-│   ├── StatusItemController.swift    — NSStatusItem + menu lifecycle
-│   ├── MenuBuilder.swift             — builds dynamic NSMenu per view mode
-│   ├── ViewSelectorRow.swift         — Text | Images | Grupos switcher
-│   ├── TextRowView.swift             — [30-char preview] [📁 group] [⭐] [🗑]
-│   ├── ImageRowView.swift            — [80×80 thumbnail] [📁 group] [⭐] [🗑] [qlmanage]
-│   ├── GroupRowView.swift            — [✓ filter] [name] [✎] [🗑] + "Sin grupo" checkbox row
-│   ├── GroupContextMenu.swift        — native right-click menu to assign/reassign group
-│   └── GroupPrompt.swift             — modal alerts for create/rename/delete group
+│   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
+│   ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
+│   ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
+│   ├── AboutView.swift / AboutWindowController.swift
 └── Resources/
     └── (icons will go here)
 ```
+
+`PopoverRootView` holds the SwiftUI views: `ClipboardTextRow`, `ClipboardImageRow`
+(each with a 📁 `Menu` and a right-click `.contextMenu` for group assignment), and
+`GroupsManageView` / `GroupManageRow` (checkbox filter + inline rename + delete).
+Plain data mutations call `ClipboardStore` directly; only paste/about/quit go through
+`PopoverActions` on the controller.
 
 ## Models
 
@@ -48,11 +54,9 @@ src/ClipboardManager/
 ## Groups
 
 - A favourite can belong to at most one group. Assigning a group auto-favourites the item (so it survives the per-type cap); un-favouriting removes it from its group.
-- Assign/reassign via the 📁 button on each text/image row, which opens the native
-  `GroupContextMenu`. Right-click is NOT usable: AppKit doesn't deliver `rightMouseDown`
-  to custom views inside an open `NSMenu` (it just dismisses the menu), so the 📁
-  button is the only path. The status menu is closed and the picker popped up on the
-  next run-loop pass (a new menu can't open while the status menu's tracking loop runs).
+- Assign/reassign via the 📁 `Menu` on each text/image row, or by right-clicking the row
+  (`.contextMenu`) — both list the groups, "Sin grupo", and "Nuevo grupo…". Both work
+  natively now that the UI is a SwiftUI popover (they did not inside the old `NSMenu`).
 - The **Grupos** view manages groups (create/rename/delete). Deleting a group keeps the items and only clears their `groupID`.
 - Each group's checkbox (and the fixed "Sin grupo" row, backed by the `showUngroupedFavorites` UserDefaults flag) filters which favourites appear in the Text/Images lists.
 
@@ -62,4 +66,5 @@ src/ClipboardManager/
 - @MainActor for UI, async/await for persistence
 - MVVM: ClipboardStore as single source of truth
 - JSON atomically written with `.atomic` option
-- NSView subclasses with `mouseDown` forwarding for buttons inside NSMenuItem
+- UI is SwiftUI hosted in an `NSPopover`; the store is an `ObservableObject` the views
+  observe, so no manual refresh — adding an item repaints the list automatically

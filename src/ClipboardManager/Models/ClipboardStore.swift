@@ -11,7 +11,7 @@ import Foundation
 import Combine
 
 /// The current display filter for the menu.
-public enum ClipboardViewMode: String, Codable, Sendable {
+public enum ClipboardViewMode: String, Codable, Sendable, Hashable {
     case text
     case images
     case groups

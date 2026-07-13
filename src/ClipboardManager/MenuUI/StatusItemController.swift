@@ -2,45 +2,46 @@
 //  StatusItemController.swift
 //  ClipboardManager
 //
-//  Owns the NSStatusItem and its menu. Rebuilds the menu on open, refreshes
-//  visible rows each tick, and routes commands to the store.
+//  Owns the NSStatusItem and a SwiftUI popover. We use a popover (not an NSMenu)
+//  because custom rows inside a tracking NSMenu can't reliably receive clicks —
+//  buttons, right-click and nested menus all fail there. In a popover, SwiftUI
+//  handles all of that natively.
+//
+//  Paste flow: showing the popover activates our app (required so the popover's
+//  controls respond to clicks), which steals focus from whatever app the user
+//  was in. So we capture that app as the paste target BEFORE activating, and
+//  reactivate + Cmd+V it when an item is chosen.
 //
 
 import AppKit
+import SwiftUI
 
-/// Manages the menu-bar status item and its menu lifecycle.
+/// Callbacks the SwiftUI popover needs that live at the app/controller level.
+/// All plain data mutations go straight to `ClipboardStore`; only these need
+/// the controller (focus/paste, app windows).
+struct PopoverActions {
+    let selectItem: (ClipboardItem) -> Void
+    let quickLook: (ClipboardItem) -> Void
+    let about: () -> Void
+    let quit: () -> Void
+}
+
+/// Manages the menu-bar status item and its popover.
 @MainActor
-final class StatusItemController: NSObject, NSMenuDelegate {
+final class StatusItemController: NSObject {
 
     private let statusItem: NSStatusItem
-    private let menu = NSMenu()
     private let store: ClipboardStore
-    private let builder = MenuBuilder()
+    private let popover = NSPopover()
+    private var eventMonitor: Any?
 
-    private var textRows: MenuBuilder.TextRows = [:]
-    private var imageRows: MenuBuilder.ImageRows = [:]
-    private var isMenuOpen = false
+    /// Rolling history of the last few non-self app activations, newest last,
+    /// used as a fallback when resolving the paste target.
+    private var focusHistory: [NSRunningApplication] = []
 
-    /// Timestamped record of an app becoming active.
-    private struct FocusEvent {
-        let app: NSRunningApplication
-        let at: Date
-    }
-
-    /// Rolling history of the last few non-self app activations, newest last.
-    /// We need history (not a single value) because opening the menu on a
-    /// SECOND display makes macOS activate that display's frontmost app (a
-    /// "phantom" activation) a fraction of a second before the menu opens —
-    /// which would otherwise overwrite the app that actually had key focus.
-    private var focusHistory: [FocusEvent] = []
-
-    /// The paste target chosen once when the menu opens, so later phantom
-    /// activations can't change it mid-interaction.
+    /// The app to paste into, captured when the popover opens (before we steal
+    /// focus by activating ourselves).
     private var pasteTarget: NSRunningApplication?
-
-    /// Activations newer than this (relative to menu-open time) are treated as
-    /// the click-induced phantom and skipped. The real focus is always older.
-    private static let phantomWindow: TimeInterval = 0.4
 
     init(store: ClipboardStore) {
         self.store = store
@@ -48,13 +49,151 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         super.init()
 
         configureButton()
-        menu.delegate = self
-        statusItem.menu = menu
+        setupPopover()
         observeAppActivation()
     }
 
-    /// Continuously records the last non-self app to become active, so we always
-    /// know the true previous focus regardless of displays or menu timing.
+    // MARK: - Status button
+
+    private func configureButton() {
+        guard let button = statusItem.button else { return }
+        let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Manager")
+            ?? NSImage(systemSymbolName: "list.clipboard", accessibilityDescription: "Clipboard Manager")
+        image?.isTemplate = true
+        button.image = image
+        button.imagePosition = .imageLeading
+        button.target = self
+        button.action = #selector(handleClick(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    private func setupPopover() {
+        // `.applicationDefined`: in an LSUIElement app that isn't active, a
+        // `.transient` popover can't become key and macOS closes it immediately.
+        // We control closing ourselves (via the outside-click monitor).
+        popover.behavior = .applicationDefined
+        popover.animates = true
+        popover.contentSize = NSSize(width: 340, height: 460)
+        let root = PopoverRootView(store: store, actions: makeActions())
+        popover.contentViewController = NSHostingController(rootView: root)
+    }
+
+    private func makeActions() -> PopoverActions {
+        PopoverActions(
+            selectItem: { [weak self] item in self?.selectItem(item) },
+            quickLook: { [weak self] item in self?.quickLook(item) },
+            about: { AboutWindowController.show() },
+            quit: { NSApp.terminate(nil) }
+        )
+    }
+
+    // MARK: - Click handling
+
+    @objc private func handleClick(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || (event?.modifierFlags.contains(.control) ?? false) {
+            showStatusMenu(sender)
+        } else {
+            togglePopover(sender)
+        }
+    }
+
+    private func togglePopover(_ sender: NSStatusBarButton) {
+        if popover.isShown {
+            closePopover()
+        } else {
+            showPopover(sender)
+        }
+    }
+
+    private func showPopover(_ sender: NSStatusBarButton) {
+        // Capture the paste target BEFORE activating ourselves.
+        pasteTarget = resolvePasteTarget()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        registerOutsideClickMonitor()
+    }
+
+    private func closePopover() {
+        popover.performClose(nil)
+        unregisterOutsideClickMonitor()
+    }
+
+    private func registerOutsideClickMonitor() {
+        unregisterOutsideClickMonitor()
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.closePopover()
+        }
+    }
+
+    private func unregisterOutsideClickMonitor() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+    }
+
+    // MARK: - Right-click menu (escape hatch: open / about / quit)
+
+    private func showStatusMenu(_ sender: NSStatusBarButton) {
+        if popover.isShown { closePopover() }
+
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Abrir", action: #selector(openFromMenu), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "About Clipboard Manager", action: #selector(aboutFromMenu), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Quit Clipboard Manager", action: #selector(quitFromMenu), keyEquivalent: "q").target = self
+
+        statusItem.menu = menu
+        sender.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func openFromMenu() {
+        guard let button = statusItem.button else { return }
+        // The menu is still closing; defer a run-loop pass before showing.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.popover.isShown else { return }
+            self.showPopover(button)
+        }
+    }
+
+    @objc private func aboutFromMenu() { AboutWindowController.show() }
+    @objc private func quitFromMenu() { NSApp.terminate(nil) }
+
+    // MARK: - Paste
+
+    private func selectItem(_ item: ClipboardItem) {
+        let target = pasteTarget
+        closePopover()
+        switch item.contentType {
+        case .text:
+            if let text = item.textContent {
+                PasteboardHelper.copyAndPaste(text: text, reactivating: target)
+            }
+        case .image:
+            if let image = item.loadImage() {
+                PasteboardHelper.copyAndPaste(image: image, reactivating: target)
+            }
+        }
+    }
+
+    private func quickLook(_ item: ClipboardItem) {
+        guard let url = item.imageFileURL else { return }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/qlmanage")
+        process.arguments = ["-p", url.path]
+        do {
+            try process.run()
+        } catch {
+            NSLog("ClipboardManager: failed to open Quick Look: \(error)")
+        }
+    }
+
+    // MARK: - Focus tracking
+
+    /// Continuously records the last non-self app to become active.
     private func observeAppActivation() {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -63,201 +202,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         ) { [weak self] note in
             guard let self = self else { return }
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            // Ignore our own activations (e.g. when the menu-bar item is clicked).
             guard app.processIdentifier != NSRunningApplication.current.processIdentifier else { return }
-            self.focusHistory.append(FocusEvent(app: app, at: Date()))
-            // Keep the history short — we only ever look back a couple of entries.
+            self.focusHistory.append(app)
             if self.focusHistory.count > 8 {
                 self.focusHistory.removeFirst(self.focusHistory.count - 8)
             }
         }
     }
 
-    // MARK: - Status button
-
-    private func configureButton() {
-        guard let button = statusItem.button else { return }
-        // "doc.on.clipboard" está disponible desde macOS 11+
-        let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Manager")
-            ?? NSImage(systemSymbolName: "list.clipboard", accessibilityDescription: "Clipboard Manager")
-        image?.isTemplate = true
-        button.image = image
-        button.imagePosition = .imageLeading
-    }
-
-    // MARK: - Tick (called 1 Hz)
-
-    /// Called once per second while the menu is open. Rebuilds the menu
-    /// to reflect new items, favourites toggles, or deletions.
-    func tick() {
-        guard isMenuOpen else { return }
-        let rows = builder.populate(menu, store: store, actions: makeActions())
-        textRows = rows.textRows
-        imageRows = rows.imageRows
-    }
-
-    // MARK: - Menu actions
-
-    private func makeActions() -> MenuActions {
-        MenuActions(
-            switchToText: { [weak self] in
-                guard let self = self else { return }
-                self.store.viewMode = .text
-                self.rebuildMenu()
-            },
-            switchToImages: { [weak self] in
-                guard let self = self else { return }
-                self.store.viewMode = .images
-                self.rebuildMenu()
-            },
-            switchToGroups: { [weak self] in
-                guard let self = self else { return }
-                self.store.viewMode = .groups
-                self.rebuildMenu()
-            },
-            select: { [weak self] item in
-                guard let self = self else { return }
-                // Use the target fixed at menu-open time, not the live focus —
-                // by now our own app is frontmost and any later activation is noise.
-                let target = self.pasteTarget
-                // Dismiss the menu via its known instance so key focus returns
-                // to the previously active app before Cmd+V is posted.
-                self.menu.cancelTracking()
-                switch item.contentType {
-                case .text:
-                    if let text = item.textContent {
-                        PasteboardHelper.copyAndPaste(text: text, reactivating: target)
-                    }
-                case .image:
-                    if let image = item.loadImage() {
-                        PasteboardHelper.copyAndPaste(image: image, reactivating: target)
-                    }
-                }
-            },
-            toggleFavorite: { [weak self] id in
-                self?.store.toggleFavorite(id: id)
-                self?.rebuildMenuIfOpen()
-            },
-            delete: { [weak self] id in
-                self?.store.remove(id: id)
-                self?.rebuildMenuIfOpen()
-            },
-            clearText: { [weak self] in
-                self?.store.clearNonFavorites(ofType: .text)
-                self?.rebuildMenuIfOpen()
-            },
-            clearImages: { [weak self] in
-                self?.store.clearNonFavorites(ofType: .image)
-                self?.rebuildMenuIfOpen()
-            },
-            assignGroup: { [weak self] itemID, groupID in
-                self?.store.assignGroup(itemID: itemID, groupID: groupID)
-                self?.rebuildMenuIfOpen()
-            },
-            newGroupAndAssign: { [weak self] itemID in
-                guard let self = self else { return }
-                // A modal prompt can't run over a tracking menu — close it first.
-                self.menu.cancelTracking()
-                guard let name = GroupPrompt.text(
-                    title: "Nuevo grupo",
-                    message: "Nombre del grupo:",
-                    okTitle: "Crear"
-                ), let groupID = self.store.addGroup(name: name) else { return }
-                self.store.assignGroup(itemID: itemID, groupID: groupID)
-            },
-            toggleGroupFilter: { [weak self] id in
-                self?.store.toggleGroupFilter(id: id)
-                self?.rebuildMenuIfOpen()
-            },
-            renameGroup: { [weak self] id in
-                guard let self = self else { return }
-                let current = self.store.groups.first(where: { $0.id == id })?.name ?? ""
-                self.menu.cancelTracking()
-                guard let name = GroupPrompt.text(
-                    title: "Renombrar grupo",
-                    message: "Nuevo nombre:",
-                    defaultValue: current,
-                    okTitle: "Guardar"
-                ) else { return }
-                self.store.renameGroup(id: id, to: name)
-            },
-            deleteGroup: { [weak self] id in
-                guard let self = self else { return }
-                let name = self.store.groups.first(where: { $0.id == id })?.name ?? ""
-                self.menu.cancelTracking()
-                let ok = GroupPrompt.confirm(
-                    title: "Eliminar grupo",
-                    message: "Se eliminará el grupo «\(name)». Los textos e imágenes se conservan; solo dejan de estar agrupados.",
-                    destructiveTitle: "Eliminar"
-                )
-                if ok { self.store.deleteGroup(id: id) }
-            },
-            newGroup: { [weak self] in
-                guard let self = self else { return }
-                self.menu.cancelTracking()
-                guard let name = GroupPrompt.text(
-                    title: "Nuevo grupo",
-                    message: "Nombre del grupo:",
-                    okTitle: "Crear"
-                ) else { return }
-                self.store.addGroup(name: name)
-            },
-            toggleUngroupedFilter: { [weak self] in
-                self?.store.showUngroupedFavorites.toggle()
-                self?.rebuildMenuIfOpen()
-            },
-            about: {
-                AboutWindowController.show()
-            },
-            quit: { NSApp.terminate(nil) }
-        )
-    }
-
-    private func rebuildMenu() {
-        let rows = builder.populate(menu, store: store, actions: makeActions())
-        textRows = rows.textRows
-        imageRows = rows.imageRows
-    }
-
-    private func rebuildMenuIfOpen() {
-        guard isMenuOpen else { return }
-        rebuildMenu()
-    }
-
-    // MARK: - NSMenuDelegate
-
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        let rows = builder.populate(menu, store: store, actions: makeActions())
-        textRows = rows.textRows
-        imageRows = rows.imageRows
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        isMenuOpen = true
-        pasteTarget = resolvePasteTarget()
-    }
-
-    /// Picks the app to paste into when the menu opens. Skips any activation that
-    /// happened within `phantomWindow` of now, because clicking the status item
-    /// on a second display activates that display's frontmost app just before
-    /// the menu opens — that activation is not the user's real focus.
+    /// The app to paste into: the frontmost app right now (before we activate),
+    /// falling back to the most recent app we saw activate.
     private func resolvePasteTarget() -> NSRunningApplication? {
-        let now = Date()
-        // Walk newest→oldest; take the first activation that is NOT the phantom
-        // (i.e. older than the phantom window) and whose app is still running.
-        for event in focusHistory.reversed() {
-            if now.timeIntervalSince(event.at) < Self.phantomWindow { continue }
-            if event.app.isTerminated { continue }
-            return event.app
+        let selfPID = NSRunningApplication.current.processIdentifier
+        if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != selfPID {
+            return front
         }
-        // Everything was within the phantom window (or empty) — fall back to the
-        // most recent still-running app we saw.
-        return focusHistory.reversed().first(where: { !$0.app.isTerminated })?.app
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        isMenuOpen = false
-        textRows = [:]
-        imageRows = [:]
+        return focusHistory.last(where: { !$0.isTerminated && $0.processIdentifier != selfPID })
     }
 }

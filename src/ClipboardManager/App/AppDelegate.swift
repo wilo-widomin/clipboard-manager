@@ -51,11 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusItemController = controller
         self.monitor = ClipboardMonitor(store: store)
 
-        // Start the 1 Hz tick for clipboard monitoring and menu refresh.
+        // Start the 1 Hz tick for clipboard monitoring. The popover UI is SwiftUI
+        // bound to the store's @Published state, so it refreshes automatically
+        // when the monitor adds items — no manual menu rebuild needed.
         tickTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.monitor?.tick()
-                self?.statusItemController?.tick()
             }
         }
     }
