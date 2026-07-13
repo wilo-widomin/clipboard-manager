@@ -30,6 +30,7 @@ final class ImageRowView: NSView {
     private var currentGroupID: UUID?
 
     private let imageView = NSImageView()
+    private let groupButton = NSButton()
     private let favoriteButton = NSButton()
     private let deleteButton = NSButton()
 
@@ -70,6 +71,7 @@ final class ImageRowView: NSView {
                   item.id.uuidString, item.imageFilename ?? "nil")
         }
         updateFavoriteIcon(isFavorite: item.isFavorite)
+        updateGroupIcon(hasGroup: item.groupID != nil)
     }
 
     // MARK: - Layout
@@ -88,6 +90,15 @@ final class ImageRowView: NSView {
             imageView.widthAnchor.constraint(equalToConstant: Self.thumbnailSize),
             imageView.heightAnchor.constraint(equalToConstant: Self.thumbnailSize),
         ])
+
+        groupButton.bezelStyle = .shadowlessSquare
+        groupButton.isBordered = false
+        groupButton.imagePosition = .imageOnly
+        groupButton.contentTintColor = .secondaryLabelColor
+        groupButton.target = self
+        groupButton.action = #selector(groupTapped)
+        groupButton.toolTip = "Asignar a grupo"
+        groupButton.setContentHuggingPriority(.required, for: .horizontal)
 
         favoriteButton.bezelStyle = .shadowlessSquare
         favoriteButton.isBordered = false
@@ -111,7 +122,7 @@ final class ImageRowView: NSView {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let rowStack = NSStackView(views: [imageView, spacer, favoriteButton, deleteButton])
+        let rowStack = NSStackView(views: [imageView, spacer, groupButton, favoriteButton, deleteButton])
         rowStack.orientation = .horizontal
         rowStack.alignment = .centerY
         rowStack.spacing = 10
@@ -133,10 +144,43 @@ final class ImageRowView: NSView {
         favoriteButton.contentTintColor = isFavorite ? .systemYellow : .secondaryLabelColor
     }
 
+    private func updateGroupIcon(hasGroup: Bool) {
+        let symbol = hasGroup ? "folder.fill" : "folder"
+        groupButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Group")
+        groupButton.contentTintColor = hasGroup ? .controlAccentColor : .secondaryLabelColor
+    }
+
     // MARK: - Actions
 
     @objc private func favoriteTapped() {
         onToggleFavorite?()
+    }
+
+    @objc private func groupTapped() {
+        presentGroupAssignmentMenu()
+    }
+
+    /// Shows the group-assignment menu. See TextRowView for why the status menu
+    /// is closed first and the popup is deferred to the next run-loop pass.
+    private func presentGroupAssignmentMenu() {
+        guard let window = window else { return }
+        let assign = onAssignGroup
+        let makeNew = onNewGroupAndAssign
+        let menu = GroupContextMenu.make(
+            groups: groups,
+            currentGroupID: currentGroupID,
+            onAssign: { assign?($0) },
+            onNew: { makeNew?() }
+        )
+        let frameInWindow = groupButton.convert(groupButton.bounds, to: nil)
+        let screenRect = window.convertToScreen(frameInWindow)
+        let point = NSPoint(x: screenRect.minX, y: screenRect.minY)
+
+        enclosingMenuItem?.menu?.cancelTracking()
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            menu.popUp(positioning: nil, at: point, in: nil)
+        }
     }
 
     @objc private func deleteTapped() {
@@ -204,6 +248,8 @@ final class ImageRowView: NSView {
             deleteButton.mouseDown(with: event)
         } else if favoriteButton.frame.contains(location) {
             favoriteButton.mouseDown(with: event)
+        } else if groupButton.frame.contains(location) {
+            presentGroupAssignmentMenu()
         } else {
             // Dismiss the menu first so key focus returns to the previously
             // active app before PasteboardHelper posts Cmd+V.
@@ -212,15 +258,9 @@ final class ImageRowView: NSView {
         }
     }
 
-    // Right-click assigns the item to a group.
+    // Right-click also assigns to a group, where AppKit delivers it (it usually
+    // does not inside an open menu — hence the group button above).
     override func rightMouseDown(with event: NSEvent) {
-        let menu = GroupContextMenu.make(
-            groups: groups,
-            currentGroupID: currentGroupID,
-            onAssign: { [weak self] gid in self?.onAssignGroup?(gid) },
-            onNew: { [weak self] in self?.onNewGroupAndAssign?() }
-        )
-        let location = convert(event.locationInWindow, from: nil)
-        menu.popUp(positioning: nil, at: location, in: self)
+        presentGroupAssignmentMenu()
     }
 }

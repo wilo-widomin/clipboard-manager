@@ -33,7 +33,7 @@ clipboard-manager/
 - ✅ Captura automática de texto e imágenes del portapapeles
 - ✅ Hasta 100 items, ordenados del más reciente al más antiguo
 - ✅ Favoritos (⭐) siempre al principio de la lista
-- ✅ Grupos para favoritos: clic derecho sobre un item para asignarlo/reasignarlo,
+- ✅ Grupos para favoritos: botón 📁 en cada item para asignarlo/reasignarlo,
   vista "Grupos" para crear/renombrar/eliminar, y checkbox por grupo para filtrar
   qué favoritos se muestran en las listas de Texto/Imágenes
 - ✅ Vista separada para texto, imágenes y grupos (submenú)

@@ -30,8 +30,8 @@ src/ClipboardManager/
 │   ├── StatusItemController.swift    — NSStatusItem + menu lifecycle
 │   ├── MenuBuilder.swift             — builds dynamic NSMenu per view mode
 │   ├── ViewSelectorRow.swift         — Text | Images | Grupos switcher
-│   ├── TextRowView.swift             — [30-char preview] [⭐] [🗑], right-click → assign group
-│   ├── ImageRowView.swift            — [80×80 thumbnail] [⭐] [🗑] [qlmanage], right-click → assign group
+│   ├── TextRowView.swift             — [30-char preview] [📁 group] [⭐] [🗑]
+│   ├── ImageRowView.swift            — [80×80 thumbnail] [📁 group] [⭐] [🗑] [qlmanage]
 │   ├── GroupRowView.swift            — [✓ filter] [name] [✎] [🗑] + "Sin grupo" checkbox row
 │   ├── GroupContextMenu.swift        — native right-click menu to assign/reassign group
 │   └── GroupPrompt.swift             — modal alerts for create/rename/delete group
@@ -48,7 +48,11 @@ src/ClipboardManager/
 ## Groups
 
 - A favourite can belong to at most one group. Assigning a group auto-favourites the item (so it survives the per-type cap); un-favouriting removes it from its group.
-- Assign/reassign via right-click on a text/image row (native `GroupContextMenu`).
+- Assign/reassign via the 📁 button on each text/image row, which opens the native
+  `GroupContextMenu`. Right-click on the row triggers the same menu **where AppKit
+  delivers it** — inside an open `NSMenu` it usually does not, so the 📁 button is
+  the reliable path. The status menu is closed and the picker popped up on the next
+  run-loop pass (a new menu can't open while the status menu's tracking loop runs).
 - The **Grupos** view manages groups (create/rename/delete). Deleting a group keeps the items and only clears their `groupID`.
 - Each group's checkbox (and the fixed "Sin grupo" row, backed by the `showUngroupedFavorites` UserDefaults flag) filters which favourites appear in the Text/Images lists.
 
