@@ -11,6 +11,21 @@
 
 import SwiftUI
 import AppKit
+import ObjectiveC
+
+enum Cursors {
+    /// The diagonal (NW–SE) window-resize cursor. There's no public diagonal
+    /// resize cursor before macOS 15, so we use AppKit's private class method,
+    /// guarded by a runtime check, and fall back to the vertical resize cursor.
+    static var resizeNWSE: NSCursor {
+        let sel = NSSelectorFromString("_windowResizeNorthWestSouthEastCursor")
+        if class_getClassMethod(NSCursor.self, sel) != nil,
+           let cursor = (NSCursor.self as AnyObject).perform(sel)?.takeUnretainedValue() as? NSCursor {
+            return cursor
+        }
+        return .resizeUpDown
+    }
+}
 
 /// Persisted, clamped popover size. Shared by the SwiftUI content (which drives
 /// the live size while dragging the resize grip) and the controller (initial size).
@@ -78,6 +93,12 @@ struct PopoverRootView: View {
             .padding(5)
             .contentShape(Rectangle())
             .help("Arrastra para redimensionar")
+            .onContinuousHover { phase in
+                switch phase {
+                case .active: Cursors.resizeNWSE.set()
+                case .ended: NSCursor.arrow.set()
+                }
+            }
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
@@ -279,7 +300,12 @@ struct ClipboardTextRow: View {
         .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
-        .onHover { hover = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: hover = true; NSCursor.pointingHand.set()
+            case .ended: hover = false; NSCursor.arrow.set()
+            }
+        }
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
     }
 
@@ -339,7 +365,12 @@ struct ClipboardImageRow: View {
         .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
-        .onHover { hover = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: hover = true; NSCursor.pointingHand.set()
+            case .ended: hover = false; NSCursor.arrow.set()
+            }
+        }
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
     }
 
