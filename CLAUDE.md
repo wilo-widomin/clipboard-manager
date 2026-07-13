@@ -1,6 +1,6 @@
 # Clipboard Manager
 
-macOS menubar app for clipboard history — text & images, favorites, 100 items.
+macOS menubar app for clipboard history — text & images, favorites, groups, 100 items.
 
 ## Architecture
 
@@ -19,25 +19,38 @@ src/ClipboardManager/
 │   ├── AppDelegate.swift     — @main entry, LSUIElement, tick timer
 │   └── Info.plist
 ├── Models/
-│   ├── ClipboardItem.swift    — item model (text/image, favorite, date)
-│   └── ClipboardStore.swift   — ObservableObject, max 100 items, fav sorting
+│   ├── ClipboardItem.swift    — item model (text/image, favorite, date, groupID)
+│   ├── ClipboardGroup.swift   — group model (id, name, isFilterEnabled)
+│   └── ClipboardStore.swift   — ObservableObject, max 100 items, fav sorting, groups
 ├── Monitor/
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
-│   └── JSONPersistenceService.swift  — async JSON read/write
+│   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
 ├── MenuUI/
 │   ├── StatusItemController.swift    — NSStatusItem + menu lifecycle
 │   ├── MenuBuilder.swift             — builds dynamic NSMenu per view mode
-│   ├── TextRowView.swift             — [30-char preview] [⭐] [🗑]
-│   └── ImageRowView.swift            — [80×80 thumbnail] [⭐] [🗑] [qlmanage]
+│   ├── ViewSelectorRow.swift         — Text | Images | Grupos switcher
+│   ├── TextRowView.swift             — [30-char preview] [⭐] [🗑], right-click → assign group
+│   ├── ImageRowView.swift            — [80×80 thumbnail] [⭐] [🗑] [qlmanage], right-click → assign group
+│   ├── GroupRowView.swift            — [✓ filter] [name] [✎] [🗑] + "Sin grupo" checkbox row
+│   ├── GroupContextMenu.swift        — native right-click menu to assign/reassign group
+│   └── GroupPrompt.swift             — modal alerts for create/rename/delete group
 └── Resources/
     └── (icons will go here)
 ```
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageData(PNG), isFavorite
-- **ClipboardStore**: `@Published items` — favourites first (by date desc), then rest (by date desc). Max 100. `visibleItems` filtered by `viewMode`.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional). `groupID` is optional so older `store.json` files decode cleanly.
+- **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc). Max 100. `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (only affects favourites).
+
+## Groups
+
+- A favourite can belong to at most one group. Assigning a group auto-favourites the item (so it survives the per-type cap); un-favouriting removes it from its group.
+- Assign/reassign via right-click on a text/image row (native `GroupContextMenu`).
+- The **Grupos** view manages groups (create/rename/delete). Deleting a group keeps the items and only clears their `groupID`.
+- Each group's checkbox (and the fixed "Sin grupo" row, backed by the `showUngroupedFavorites` UserDefaults flag) filters which favourites appear in the Text/Images lists.
 
 ## Code Standards
 
