@@ -91,7 +91,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// to reflect new items, favourites toggles, or deletions.
     func tick() {
         guard isMenuOpen else { return }
-        let rows = builder.populate(menu, items: store.items, viewMode: store.viewMode, actions: makeActions())
+        let rows = builder.populate(menu, store: store, actions: makeActions())
         textRows = rows.textRows
         imageRows = rows.imageRows
     }
@@ -108,6 +108,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             switchToImages: { [weak self] in
                 guard let self = self else { return }
                 self.store.viewMode = .images
+                self.rebuildMenu()
+            },
+            switchToGroups: { [weak self] in
+                guard let self = self else { return }
+                self.store.viewMode = .groups
                 self.rebuildMenu()
             },
             select: { [weak self] item in
@@ -145,6 +150,62 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 self?.store.clearNonFavorites(ofType: .image)
                 self?.rebuildMenuIfOpen()
             },
+            assignGroup: { [weak self] itemID, groupID in
+                self?.store.assignGroup(itemID: itemID, groupID: groupID)
+                self?.rebuildMenuIfOpen()
+            },
+            newGroupAndAssign: { [weak self] itemID in
+                guard let self = self else { return }
+                // A modal prompt can't run over a tracking menu — close it first.
+                self.menu.cancelTracking()
+                guard let name = GroupPrompt.text(
+                    title: "Nuevo grupo",
+                    message: "Nombre del grupo:",
+                    okTitle: "Crear"
+                ), let groupID = self.store.addGroup(name: name) else { return }
+                self.store.assignGroup(itemID: itemID, groupID: groupID)
+            },
+            toggleGroupFilter: { [weak self] id in
+                self?.store.toggleGroupFilter(id: id)
+                self?.rebuildMenuIfOpen()
+            },
+            renameGroup: { [weak self] id in
+                guard let self = self else { return }
+                let current = self.store.groups.first(where: { $0.id == id })?.name ?? ""
+                self.menu.cancelTracking()
+                guard let name = GroupPrompt.text(
+                    title: "Renombrar grupo",
+                    message: "Nuevo nombre:",
+                    defaultValue: current,
+                    okTitle: "Guardar"
+                ) else { return }
+                self.store.renameGroup(id: id, to: name)
+            },
+            deleteGroup: { [weak self] id in
+                guard let self = self else { return }
+                let name = self.store.groups.first(where: { $0.id == id })?.name ?? ""
+                self.menu.cancelTracking()
+                let ok = GroupPrompt.confirm(
+                    title: "Eliminar grupo",
+                    message: "Se eliminará el grupo «\(name)». Los textos e imágenes se conservan; solo dejan de estar agrupados.",
+                    destructiveTitle: "Eliminar"
+                )
+                if ok { self.store.deleteGroup(id: id) }
+            },
+            newGroup: { [weak self] in
+                guard let self = self else { return }
+                self.menu.cancelTracking()
+                guard let name = GroupPrompt.text(
+                    title: "Nuevo grupo",
+                    message: "Nombre del grupo:",
+                    okTitle: "Crear"
+                ) else { return }
+                self.store.addGroup(name: name)
+            },
+            toggleUngroupedFilter: { [weak self] in
+                self?.store.showUngroupedFavorites.toggle()
+                self?.rebuildMenuIfOpen()
+            },
             about: {
                 AboutWindowController.show()
             },
@@ -153,7 +214,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func rebuildMenu() {
-        let rows = builder.populate(menu, items: store.items, viewMode: store.viewMode, actions: makeActions())
+        let rows = builder.populate(menu, store: store, actions: makeActions())
         textRows = rows.textRows
         imageRows = rows.imageRows
     }
@@ -166,7 +227,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: - NSMenuDelegate
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let rows = builder.populate(menu, items: store.items, viewMode: store.viewMode, actions: makeActions())
+        let rows = builder.populate(menu, store: store, actions: makeActions())
         textRows = rows.textRows
         imageRows = rows.imageRows
     }

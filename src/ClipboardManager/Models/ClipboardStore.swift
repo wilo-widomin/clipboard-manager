@@ -14,6 +14,7 @@ import Combine
 public enum ClipboardViewMode: String, Codable, Sendable {
     case text
     case images
+    case groups
 }
 
 /// Owns the clipboard item list, manages ordering and persistence triggers.
@@ -27,6 +28,17 @@ public final class ClipboardStore: ObservableObject {
     /// All items, ordered: favourites first (by date desc), then rest (by date desc).
     @Published public private(set) var items: [ClipboardItem] = []
 
+    /// User-defined groups. Favourites can be assigned to at most one each.
+    @Published public private(set) var groups: [ClipboardGroup] = []
+
+    /// Whether ungrouped favourites (groupID == nil) are shown in the Text /
+    /// Images lists. Controlled by the "Sin grupo" checkbox in the Groups view.
+    @Published public var showUngroupedFavorites: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showUngroupedFavorites, forKey: "showUngroupedFavorites")
+        }
+    }
+
     /// Which view the menu should show. Persisted in UserDefaults.
     @Published public var viewMode: ClipboardViewMode = .text {
         didSet {
@@ -34,14 +46,28 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Items filtered by the current view mode.
+    /// Items filtered by the current view mode and the active group filter.
     public var visibleItems: [ClipboardItem] {
         switch viewMode {
         case .text:
-            return items.filter { $0.contentType == .text }
+            return items.filter { $0.contentType == .text && passesGroupFilter($0) }
         case .images:
-            return items.filter { $0.contentType == .image }
+            return items.filter { $0.contentType == .image && passesGroupFilter($0) }
+        case .groups:
+            return []
         }
+    }
+
+    /// The group-checkbox filter. Only applies to favourites: a favourite is
+    /// hidden when its group's checkbox is off, or (for ungrouped favourites)
+    /// when the "Sin grupo" checkbox is off. Non-favourites are never filtered.
+    /// A favourite whose group was deleted is treated as ungrouped.
+    public func passesGroupFilter(_ item: ClipboardItem) -> Bool {
+        guard item.isFavorite else { return true }
+        if let gid = item.groupID, let group = groups.first(where: { $0.id == gid }) {
+            return group.isFilterEnabled
+        }
+        return showUngroupedFavorites
     }
 
     private let persistence: PersistenceService
@@ -53,12 +79,18 @@ public final class ClipboardStore: ObservableObject {
            let mode = ClipboardViewMode(rawValue: raw) {
             self.viewMode = mode
         }
+        // Restore the "Sin grupo" filter toggle (defaults to shown).
+        if UserDefaults.standard.object(forKey: "showUngroupedFavorites") != nil {
+            self.showUngroupedFavorites = UserDefaults.standard.bool(forKey: "showUngroupedFavorites")
+        }
     }
 
     // MARK: - Loading
 
     public func load() async {
         let loaded = await persistence.load()
+        let loadedGroups = await persistence.loadGroups()
+        groups = loadedGroups
         // Enforce the per-type limits on load too, so a store that grew past
         // the limit under an older build (or a lowered limit) is normalised.
         items = capAllTypes(sort(loaded))
@@ -171,10 +203,14 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
-    /// Toggles the favourite flag on an item.
+    /// Toggles the favourite flag on an item. Un-favouriting also removes the
+    /// item from any group, since group membership implies "favourite".
     public func toggleFavorite(id: ClipboardItem.ID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].isFavorite.toggle()
+        if !items[idx].isFavorite {
+            items[idx].groupID = nil
+        }
         items = sort(items)
         persist()
     }
@@ -209,6 +245,64 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
+    // MARK: - Groups
+
+    /// Creates a new group with the given name (trimmed). Returns its id, or
+    /// nil if the name is blank. Duplicate names are allowed (ids are unique).
+    @discardableResult
+    public func addGroup(name: String) -> UUID? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let group = ClipboardGroup(name: trimmed)
+        groups.append(group)
+        persistGroups()
+        return group.id
+    }
+
+    /// Renames a group. No-op if the id is unknown or the name is blank.
+    public func renameGroup(id: ClipboardGroup.ID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
+        groups[idx].name = trimmed
+        persistGroups()
+    }
+
+    /// Deletes a group. Items assigned to it are kept and become ungrouped
+    /// (their content — text/passwords and images — is untouched).
+    public func deleteGroup(id: ClipboardGroup.ID) {
+        guard groups.contains(where: { $0.id == id }) else { return }
+        groups.removeAll { $0.id == id }
+        var itemsChanged = false
+        for idx in items.indices where items[idx].groupID == id {
+            items[idx].groupID = nil
+            itemsChanged = true
+        }
+        persistGroups()
+        if itemsChanged { persist() }
+    }
+
+    /// Toggles a group's filter checkbox (show/hide its favourites in the lists).
+    public func toggleGroupFilter(id: ClipboardGroup.ID) {
+        guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
+        groups[idx].isFilterEnabled.toggle()
+        persistGroups()
+    }
+
+    /// Assigns an item to a group (or removes it from any group when `groupID`
+    /// is nil). Assigning to a group also marks the item as a favourite, so it
+    /// survives the per-type cap. Removing the group leaves the favourite flag
+    /// untouched.
+    public func assignGroup(itemID: ClipboardItem.ID, groupID: ClipboardGroup.ID?) {
+        guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return }
+        // Ignore unknown group ids.
+        if let gid = groupID, !groups.contains(where: { $0.id == gid }) { return }
+        items[idx].groupID = groupID
+        if groupID != nil { items[idx].isFavorite = true }
+        items = sort(items)
+        persist()
+    }
+
     // MARK: - Sorting
 
     /// Favourites first (descending date), then the rest (descending date).
@@ -230,6 +324,17 @@ public final class ClipboardStore: ObservableObject {
                 try await persistence.save(snapshot)
             } catch {
                 NSLog("ClipboardManager: failed to persist: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func persistGroups() {
+        let snapshot = groups
+        Task { [persistence] in
+            do {
+                try await persistence.saveGroups(snapshot)
+            } catch {
+                NSLog("ClipboardManager: failed to persist groups: \(error.localizedDescription)")
             }
         }
     }

@@ -18,6 +18,16 @@ final class TextRowView: NSView {
     var onDelete: (() -> Void)?
     var onSelect: (() -> Void)?
 
+    /// Assign this item to a group (nil removes it from any group).
+    var onAssignGroup: ((UUID?) -> Void)?
+    /// Create a new group (via prompt) and assign this item to it.
+    var onNewGroupAndAssign: (() -> Void)?
+
+    /// Group context injected by the builder so the right-click menu can list
+    /// the current groups and mark the item's current assignment.
+    var groups: [ClipboardGroup] = []
+    private var currentGroupID: UUID?
+
     private let previewLabel = NSTextField(labelWithString: "")
     private let favoriteButton = NSButton()
     private let deleteButton = NSButton()
@@ -27,6 +37,7 @@ final class TextRowView: NSView {
 
     init(item: ClipboardItem) {
         self.itemID = item.id
+        self.currentGroupID = item.groupID
         super.init(frame: NSRect(x: 0, y: 0, width: Self.rowWidth, height: 36))
         setupSubviews()
         update(with: item)
@@ -39,6 +50,7 @@ final class TextRowView: NSView {
 
     func update(with item: ClipboardItem) {
         previewLabel.stringValue = item.textPreview
+        currentGroupID = item.groupID
         updateFavoriteIcon(isFavorite: item.isFavorite)
     }
 
@@ -161,5 +173,17 @@ final class TextRowView: NSView {
             enclosingMenuItem?.menu?.cancelTracking()
             onSelect?()
         }
+    }
+
+    // Right-click assigns the item to a group.
+    override func rightMouseDown(with event: NSEvent) {
+        let menu = GroupContextMenu.make(
+            groups: groups,
+            currentGroupID: currentGroupID,
+            onAssign: { [weak self] gid in self?.onAssignGroup?(gid) },
+            onNew: { [weak self] in self?.onNewGroupAndAssign?() }
+        )
+        let location = convert(event.locationInWindow, from: nil)
+        menu.popUp(positioning: nil, at: location, in: self)
     }
 }

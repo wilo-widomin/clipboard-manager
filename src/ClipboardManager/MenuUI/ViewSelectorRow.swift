@@ -2,28 +2,31 @@
 //  ViewSelectorRow.swift
 //  ClipboardManager
 //
-//  Custom NSView for the view-mode switcher (Text / Images).
-//  A single row with two clickable segments. The active one is highlighted.
-//  Clicking does NOT close the menu (custom mouseDown keeps tracking alive).
+//  Custom NSView for the view-mode switcher (Text / Images / Grupos).
+//  A single row with three clickable segments. The active one is highlighted
+//  (bold + accent colour). Clicking does NOT close the menu (custom mouseDown
+//  keeps tracking alive). Trash buttons at each edge clear non-favourite text
+//  and image items.
 //
 
 import AppKit
 
-/// A row in the menu showing two toggleable segments: "Text" and "Images".
-/// The active segment appears bold / highlighted.
+/// A row in the menu showing three toggleable segments: "Text", "Images",
+/// "Grupos". The active segment appears bold / accent-coloured.
 @MainActor
 final class ViewSelectorRow: NSView {
 
     private let textSegment: NSTextField
     private let imagesSegment: NSTextField
-    private let separator: NSTextField
-    private let leftIndicator: NSView
-    private let rightIndicator: NSView
+    private let groupsSegment: NSTextField
+    private let separator1: NSTextField
+    private let separator2: NSTextField
     private let clearTextButton: NSImageView
     private let clearImagesButton: NSImageView
 
     var onSelectText: (() -> Void)?
     var onSelectImages: (() -> Void)?
+    var onSelectGroups: (() -> Void)?
     /// Clears all non-favourite text items.
     var onClearText: (() -> Void)?
     /// Clears all non-favourite image items.
@@ -35,9 +38,9 @@ final class ViewSelectorRow: NSView {
     init(selectedView: ClipboardViewMode) {
         textSegment = NSTextField(labelWithString: "Text")
         imagesSegment = NSTextField(labelWithString: "Images")
-        separator = NSTextField(labelWithString: "|")
-        leftIndicator = NSView()
-        rightIndicator = NSView()
+        groupsSegment = NSTextField(labelWithString: "Grupos")
+        separator1 = NSTextField(labelWithString: "  |  ")
+        separator2 = NSTextField(labelWithString: "  |  ")
         clearTextButton = NSImageView()
         clearImagesButton = NSImageView()
 
@@ -51,56 +54,39 @@ final class ViewSelectorRow: NSView {
     }
 
     func update(selectedView: ClipboardViewMode) {
-        let isText = selectedView == .text
-        textSegment.font = isText ? .boldSystemFont(ofSize: NSFont.systemFontSize) : .menuFont(ofSize: 0)
-        textSegment.textColor = isText ? .labelColor : .secondaryLabelColor
-        leftIndicator.isHidden = !isText
+        style(textSegment, active: selectedView == .text)
+        style(imagesSegment, active: selectedView == .images)
+        style(groupsSegment, active: selectedView == .groups)
+    }
 
-        imagesSegment.font = !isText ? .boldSystemFont(ofSize: NSFont.systemFontSize) : .menuFont(ofSize: 0)
-        imagesSegment.textColor = !isText ? .labelColor : .secondaryLabelColor
-        rightIndicator.isHidden = isText
+    private func style(_ segment: NSTextField, active: Bool) {
+        segment.font = active ? .boldSystemFont(ofSize: NSFont.systemFontSize) : .menuFont(ofSize: 0)
+        segment.textColor = active ? .controlAccentColor : .secondaryLabelColor
     }
 
     private func setupSubviews(selectedView: ClipboardViewMode) {
         translatesAutoresizingMaskIntoConstraints = false
 
-        // Left indicator dot
-        leftIndicator.wantsLayer = true
-        leftIndicator.layer?.cornerRadius = 3
-        leftIndicator.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
-
-        // Right indicator dot
-        rightIndicator.wantsLayer = true
-        rightIndicator.layer?.cornerRadius = 3
-        rightIndicator.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
-
-        // Text segment
-        textSegment.font = .menuFont(ofSize: 0)
-        textSegment.isEnabled = false  // We handle clicks via mouseDown
-        textSegment.setContentHuggingPriority(.required, for: .horizontal)
-        textSegment.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        // Separator
-        separator.stringValue = "  |  "
-        separator.font = .menuFont(ofSize: 0)
-        separator.textColor = .tertiaryLabelColor
-        separator.isEnabled = false
-        separator.setContentHuggingPriority(.required, for: .horizontal)
-
-        // Images segment
-        imagesSegment.font = .menuFont(ofSize: 0)
-        imagesSegment.isEnabled = false
-        imagesSegment.setContentHuggingPriority(.required, for: .horizontal)
-        imagesSegment.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for segment in [textSegment, imagesSegment, groupsSegment] {
+            segment.isEnabled = false  // We handle clicks via mouseDown
+            segment.setContentHuggingPriority(.required, for: .horizontal)
+            segment.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+        for sep in [separator1, separator2] {
+            sep.font = .menuFont(ofSize: 0)
+            sep.textColor = .tertiaryLabelColor
+            sep.isEnabled = false
+            sep.setContentHuggingPriority(.required, for: .horizontal)
+        }
 
         // Trash buttons pinned to each edge (clicks handled via mouseDown).
         configureTrashButton(clearTextButton, tooltip: "Borrar todos los textos (excepto favoritos)")
         configureTrashButton(clearImagesButton, tooltip: "Borrar todas las imágenes (excepto favoritos)")
 
-        let rowStack = NSStackView(views: [leftIndicator, textSegment, separator, imagesSegment, rightIndicator])
+        let rowStack = NSStackView(views: [textSegment, separator1, imagesSegment, separator2, groupsSegment])
         rowStack.orientation = .horizontal
         rowStack.alignment = .centerY
-        rowStack.spacing = 4
+        rowStack.spacing = 2
         rowStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(rowStack)
         addSubview(clearTextButton)
@@ -112,11 +98,6 @@ final class ViewSelectorRow: NSView {
             rowStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             rowStack.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 4),
             rowStack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -4),
-
-            leftIndicator.widthAnchor.constraint(equalToConstant: 6),
-            leftIndicator.heightAnchor.constraint(equalToConstant: 6),
-            rightIndicator.widthAnchor.constraint(equalToConstant: 6),
-            rightIndicator.heightAnchor.constraint(equalToConstant: 6),
 
             clearTextButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.horizontalInset),
             clearTextButton.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -142,14 +123,8 @@ final class ViewSelectorRow: NSView {
 
     // MARK: - Hit testing areas for clicks
 
-    /// The on-screen rect for the "Text" label (in our coordinate space).
-    private var textRect: NSRect {
-        textSegment.convert(textSegment.bounds, to: self)
-    }
-
-    /// The on-screen rect for the "Images" label (in our coordinate space).
-    private var imagesRect: NSRect {
-        imagesSegment.convert(imagesSegment.bounds, to: self)
+    private func rect(for view: NSView) -> NSRect {
+        view.convert(view.bounds, to: self)
     }
 
     /// Enlarged hit rect around a trash button so it's comfortable to click.
@@ -169,10 +144,12 @@ final class ViewSelectorRow: NSView {
             onClearText?()
         } else if hitRect(for: clearImagesButton).contains(location) {
             onClearImages?()
-        } else if textRect.contains(location) {
+        } else if rect(for: textSegment).contains(location) {
             onSelectText?()
-        } else if imagesRect.contains(location) {
+        } else if rect(for: imagesSegment).contains(location) {
             onSelectImages?()
+        } else if rect(for: groupsSegment).contains(location) {
+            onSelectGroups?()
         } else {
             super.mouseDown(with: event)
         }

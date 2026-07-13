@@ -33,6 +33,11 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     /// Whether the user has starred this item as a favourite.
     public var isFavorite: Bool
 
+    /// The group this item is assigned to, if any. An item belongs to at most
+    /// one group. `nil` means "ungrouped". Optional so items persisted by an
+    /// older build (which lack this key) decode cleanly as ungrouped.
+    public var groupID: UUID? = nil
+
     // MARK: - Preview helpers
 
     /// First 40 characters of the text, followed by "..." if truncated.
