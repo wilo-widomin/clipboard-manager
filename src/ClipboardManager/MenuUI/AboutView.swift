@@ -37,9 +37,8 @@ struct AboutView: View {
             Divider()
                 .padding(.horizontal, 40)
 
-            Text(AppInfo.author)
+            Link(AppInfo.author, destination: AppInfo.website)
                 .font(.footnote)
-                .foregroundStyle(.tertiary)
         }
         .padding(24)
         .frame(width: 300, height: 300)

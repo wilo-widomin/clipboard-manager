@@ -31,4 +31,7 @@ enum AppInfo {
 
     /// Author / developer credit.
     static let author: String = "widomin.com"
+
+    /// The author's website, opened from the About window.
+    static let website = URL(string: "https://www.widomin.com")!
 }
