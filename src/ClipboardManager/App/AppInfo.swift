@@ -30,5 +30,5 @@ enum AppInfo {
     }
 
     /// Author / developer credit.
-    static let author: String = "© Guillermo Domínguez"
+    static let author: String = "widomin.com"
 }
