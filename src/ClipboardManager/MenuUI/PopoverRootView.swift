@@ -4,12 +4,39 @@
 //
 //  SwiftUI content of the menu-bar popover. Three views (Texto / Imágenes /
 //  Grupos) driven by ClipboardStore. Group assignment uses a native SwiftUI
-//  Menu (the 📁 button) plus a right-click .contextMenu — both work reliably
-//  here, unlike inside an NSMenu.
+//  Menu (the 📁 button), which works reliably here unlike inside an NSMenu.
+//  A resize grip in the bottom-right corner lets the user drag the popover
+//  larger/smaller; the size is persisted.
 //
 
 import SwiftUI
 import AppKit
+
+/// Persisted, clamped popover size. Shared by the SwiftUI content (which drives
+/// the live size while dragging the resize grip) and the controller (initial size).
+enum PopoverSize {
+    static let minWidth: CGFloat = 300
+    static let minHeight: CGFloat = 260
+    static let maxWidth: CGFloat = 760
+    static let maxHeight: CGFloat = 1000
+    static let defaultSize = CGSize(width: 340, height: 460)
+
+    static func saved() -> CGSize {
+        let d = UserDefaults.standard
+        guard d.object(forKey: "popoverWidth") != nil else { return defaultSize }
+        let w = clampWidth(CGFloat(d.double(forKey: "popoverWidth")))
+        let h = clampHeight(CGFloat(d.double(forKey: "popoverHeight")))
+        return CGSize(width: w, height: h)
+    }
+
+    static func save(_ size: CGSize) {
+        UserDefaults.standard.set(Double(size.width), forKey: "popoverWidth")
+        UserDefaults.standard.set(Double(size.height), forKey: "popoverHeight")
+    }
+
+    static func clampWidth(_ v: CGFloat) -> CGFloat { min(max(v, minWidth), maxWidth) }
+    static func clampHeight(_ v: CGFloat) -> CGFloat { min(max(v, minHeight), maxHeight) }
+}
 
 struct PopoverRootView: View {
 
@@ -22,16 +49,19 @@ struct PopoverRootView: View {
     @State private var newGroupName = ""
     @State private var newGroupAssignTo: ClipboardItem.ID? = nil
 
+    // Live popover size; dragging the resize grip updates it (and persists it).
+    @State private var size = PopoverSize.saved()
+    @State private var sizeAtDragStart: CGSize?
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider()
-            footer
         }
-        .frame(width: 340, height: 460)
+        .frame(width: size.width, height: size.height)
+        .overlay(alignment: .bottomTrailing) { resizeGrip }
         .alert("Nuevo grupo", isPresented: $showNewGroupAlert) {
             TextField("Nombre", text: $newGroupName)
             Button("Cancelar", role: .cancel) { newGroupName = "" }
@@ -39,24 +69,36 @@ struct PopoverRootView: View {
         }
     }
 
+    // MARK: - Resize grip
+
+    private var resizeGrip: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.secondary)
+            .padding(5)
+            .contentShape(Rectangle())
+            .help("Arrastra para redimensionar")
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let base = sizeAtDragStart ?? size
+                        if sizeAtDragStart == nil { sizeAtDragStart = size }
+                        size = CGSize(
+                            width: PopoverSize.clampWidth(base.width + value.translation.width),
+                            height: PopoverSize.clampHeight(base.height + value.translation.height)
+                        )
+                    }
+                    .onEnded { _ in
+                        sizeAtDragStart = nil
+                        PopoverSize.save(size)
+                    }
+            )
+    }
+
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Clipboard Manager")
-                    .font(.headline)
-                Spacer()
-                if store.viewMode == .text {
-                    trashButton("Borrar textos no favoritos") {
-                        store.clearNonFavorites(ofType: .text)
-                    }
-                } else if store.viewMode == .images {
-                    trashButton("Borrar imágenes no favoritas") {
-                        store.clearNonFavorites(ofType: .image)
-                    }
-                }
-            }
+        HStack(spacing: 8) {
             Picker("", selection: $store.viewMode) {
                 Text("Texto").tag(ClipboardViewMode.text)
                 Text("Imágenes").tag(ClipboardViewMode.images)
@@ -64,6 +106,16 @@ struct PopoverRootView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+
+            if store.viewMode == .text {
+                trashButton("Borrar textos no favoritos") {
+                    store.clearNonFavorites(ofType: .text)
+                }
+            } else if store.viewMode == .images {
+                trashButton("Borrar imágenes no favoritas") {
+                    store.clearNonFavorites(ofType: .image)
+                }
+            }
         }
         .padding(10)
     }
@@ -141,21 +193,6 @@ struct PopoverRootView: View {
             .font(.callout)
             .frame(maxWidth: .infinity)
             .padding(.top, 24)
-    }
-
-    // MARK: - Footer
-
-    private var footer: some View {
-        HStack {
-            Button("Acerca de") { actions.about() }
-                .buttonStyle(.borderless)
-            Spacer()
-            Button("Salir") { actions.quit() }
-                .buttonStyle(.borderless)
-        }
-        .font(.caption)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 
     // MARK: - New group helpers
@@ -244,9 +281,6 @@ struct ClipboardTextRow: View {
         .onTapGesture(perform: onSelect)
         .onHover { hover = $0 }
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
-        .contextMenu {
-            GroupAssignmentMenu(currentGroupID: item.groupID, groups: groups, onAssign: onAssign, onNewGroup: onNewGroup)
-        }
     }
 
     private var groupMenu: some View {
@@ -307,9 +341,6 @@ struct ClipboardImageRow: View {
         .onTapGesture(perform: onSelect)
         .onHover { hover = $0 }
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
-        .contextMenu {
-            GroupAssignmentMenu(currentGroupID: item.groupID, groups: groups, onAssign: onAssign, onNewGroup: onNewGroup)
-        }
     }
 
     private var thumbnail: some View {

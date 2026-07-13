@@ -22,8 +22,6 @@ import SwiftUI
 struct PopoverActions {
     let selectItem: (ClipboardItem) -> Void
     let quickLook: (ClipboardItem) -> Void
-    let about: () -> Void
-    let quit: () -> Void
 }
 
 /// Manages the menu-bar status item and its popover.
@@ -72,18 +70,22 @@ final class StatusItemController: NSObject {
         // `.transient` popover can't become key and macOS closes it immediately.
         // We control closing ourselves (via the outside-click monitor).
         popover.behavior = .applicationDefined
-        popover.animates = true
-        popover.contentSize = NSSize(width: 340, height: 460)
+        // No animation: the SwiftUI content drives live resizing via the grip,
+        // and per-frame popover animation would make that drag feel laggy.
+        popover.animates = false
+        popover.contentSize = PopoverSize.saved()
         let root = PopoverRootView(store: store, actions: makeActions())
-        popover.contentViewController = NSHostingController(rootView: root)
+        let hosting = NSHostingController(rootView: root)
+        // Track the SwiftUI content's size so dragging the resize grip (which
+        // changes the content's .frame) actually resizes the popover.
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
     }
 
     private func makeActions() -> PopoverActions {
         PopoverActions(
             selectItem: { [weak self] item in self?.selectItem(item) },
-            quickLook: { [weak self] item in self?.quickLook(item) },
-            about: { AboutWindowController.show() },
-            quit: { NSApp.terminate(nil) }
+            quickLook: { [weak self] item in self?.quickLook(item) }
         )
     }
 
