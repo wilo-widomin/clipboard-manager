@@ -10,12 +10,11 @@ Gestor de portapapeles para macOS que vive en la barra de menús. Captura autom�
 ## Compilar y ejecutar
 
 ```bash
-# Abrir el proyecto
-open src/ClipboardManager/ClipboardManager.xcodeproj
+# Abrir el proyecto (el .xcodeproj está en la raíz del repo)
+open ClipboardManager.xcodeproj
 
 # O compilar desde terminal
-xcodebuild -project src/ClipboardManager/ClipboardManager.xcodeproj \
-  -scheme ClipboardManager build
+xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager build
 ```
 
 ## Estructura del proyecto
@@ -33,13 +32,16 @@ clipboard-manager/
 - ✅ Captura automática de texto e imágenes del portapapeles
 - ✅ Hasta 100 items, ordenados del más reciente al más antiguo
 - ✅ Favoritos (⭐) siempre al principio de la lista
-- ✅ Grupos para favoritos: botón 📁 (o clic derecho) en cada item para asignarlo/
-  reasignarlo, vista "Grupos" para crear/renombrar/eliminar, y checkbox por grupo para
-  filtrar qué favoritos se muestran en las listas de Texto/Imágenes
+- ✅ Grupos para favoritos: botón 📁 en cada item para asignarlo/reasignarlo, vista
+  "Grupos" para crear/renombrar (inline)/eliminar, y checkbox por grupo para filtrar
+  qué ítems se muestran en las listas de Texto/Imágenes
 - ✅ UI en un popover SwiftUI con pestañas Texto / Imágenes / Grupos
-- ✅ Miniaturas de 80×80 para imágenes
-- ✅ Click en imagen → abre en Vista Previa de macOS
-- ✅ Persistencia JSON entre reinicios
+- ✅ Popover redimensionable (arrastra el borde derecho, inferior o la esquina); el
+  tamaño se recuerda
+- ✅ Click izquierdo en el icono = abre/cierra; clic derecho = menú Abrir / Acerca de / Salir
+- ✅ Miniaturas para imágenes + 👁 vista rápida (Quick Look)
+- ✅ Click en un item → lo pega en la app donde estabas
+- ✅ Persistencia JSON entre reinicios (store.json + groups.json)
 - ✅ Sin Dock (LSUIElement), solo icono en barra de menús
 
 ## Licencia

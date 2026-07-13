@@ -472,8 +472,8 @@ struct GroupsManageView: View {
                 // Fixed "Sin grupo" filter row.
                 HStack(spacing: 8) {
                     Toggle("", isOn: Binding(
-                        get: { store.showUngroupedFavorites },
-                        set: { _ in store.showUngroupedFavorites.toggle() }
+                        get: { store.showUngrouped },
+                        set: { _ in store.showUngrouped.toggle() }
                     ))
                     .labelsHidden()
                     .toggleStyle(.checkbox)

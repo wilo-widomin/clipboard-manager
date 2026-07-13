@@ -31,11 +31,11 @@ public final class ClipboardStore: ObservableObject {
     /// User-defined groups. Favourites can be assigned to at most one each.
     @Published public private(set) var groups: [ClipboardGroup] = []
 
-    /// Whether ungrouped favourites (groupID == nil) are shown in the Text /
-    /// Images lists. Controlled by the "Sin grupo" checkbox in the Groups view.
-    @Published public var showUngroupedFavorites: Bool = true {
+    /// Whether ungrouped items (groupID == nil) are shown in the Text / Images
+    /// lists. Controlled by the "Sin grupo" checkbox in the Groups view.
+    @Published public var showUngrouped: Bool = true {
         didSet {
-            UserDefaults.standard.set(showUngroupedFavorites, forKey: "showUngroupedFavorites")
+            UserDefaults.standard.set(showUngrouped, forKey: "showUngroupedFavorites")
         }
     }
 
@@ -58,16 +58,16 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// The group-checkbox filter. Only applies to favourites: a favourite is
-    /// hidden when its group's checkbox is off, or (for ungrouped favourites)
-    /// when the "Sin grupo" checkbox is off. Non-favourites are never filtered.
-    /// A favourite whose group was deleted is treated as ungrouped.
+    /// The group-checkbox filter, applied to **all** items: an item is hidden
+    /// when its group's checkbox is off, or (for ungrouped items — which includes
+    /// every non-favourite, since only favourites can hold a group) when the
+    /// "Sin grupo" checkbox is off. An item whose group was deleted is treated
+    /// as ungrouped.
     public func passesGroupFilter(_ item: ClipboardItem) -> Bool {
-        guard item.isFavorite else { return true }
         if let gid = item.groupID, let group = groups.first(where: { $0.id == gid }) {
             return group.isFilterEnabled
         }
-        return showUngroupedFavorites
+        return showUngrouped
     }
 
     private let persistence: PersistenceService
@@ -81,7 +81,7 @@ public final class ClipboardStore: ObservableObject {
         }
         // Restore the "Sin grupo" filter toggle (defaults to shown).
         if UserDefaults.standard.object(forKey: "showUngroupedFavorites") != nil {
-            self.showUngroupedFavorites = UserDefaults.standard.bool(forKey: "showUngroupedFavorites")
+            self.showUngrouped = UserDefaults.standard.bool(forKey: "showUngroupedFavorites")
         }
     }
 
