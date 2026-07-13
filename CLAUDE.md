@@ -49,10 +49,10 @@ src/ClipboardManager/
 
 - A favourite can belong to at most one group. Assigning a group auto-favourites the item (so it survives the per-type cap); un-favouriting removes it from its group.
 - Assign/reassign via the 📁 button on each text/image row, which opens the native
-  `GroupContextMenu`. Right-click on the row triggers the same menu **where AppKit
-  delivers it** — inside an open `NSMenu` it usually does not, so the 📁 button is
-  the reliable path. The status menu is closed and the picker popped up on the next
-  run-loop pass (a new menu can't open while the status menu's tracking loop runs).
+  `GroupContextMenu`. Right-click is NOT usable: AppKit doesn't deliver `rightMouseDown`
+  to custom views inside an open `NSMenu` (it just dismisses the menu), so the 📁
+  button is the only path. The status menu is closed and the picker popped up on the
+  next run-loop pass (a new menu can't open while the status menu's tracking loop runs).
 - The **Grupos** view manages groups (create/rename/delete). Deleting a group keeps the items and only clears their `groupID`.
 - Each group's checkbox (and the fixed "Sin grupo" row, backed by the `showUngroupedFavorites` UserDefaults flag) filters which favourites appear in the Text/Images lists.
 

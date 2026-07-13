@@ -2,8 +2,10 @@
 //  GroupContextMenu.swift
 //  ClipboardManager
 //
-//  Builds the native right-click menu shown over a text/image row for assigning
-//  the item to a group. The current group is marked with a checkmark. Choosing
+//  Builds the native menu shown by the 📁 button on a text/image row for
+//  assigning the item to a group. The current group is marked with a checkmark.
+//  (Right-click can't be used: AppKit doesn't deliver it to custom views inside
+//  an open NSMenu — it just dismisses the menu.) Choosing
 //  a group assigns (and auto-favourites) the item; "Sin grupo" removes it from
 //  any group; "+ Nuevo grupo…" creates one and assigns it.
 //

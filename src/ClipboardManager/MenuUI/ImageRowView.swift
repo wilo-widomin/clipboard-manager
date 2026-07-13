@@ -257,10 +257,4 @@ final class ImageRowView: NSView {
             onSelect?()
         }
     }
-
-    // Right-click also assigns to a group, where AppKit delivers it (it usually
-    // does not inside an open menu — hence the group button above).
-    override func rightMouseDown(with event: NSEvent) {
-        presentGroupAssignmentMenu()
-    }
 }
