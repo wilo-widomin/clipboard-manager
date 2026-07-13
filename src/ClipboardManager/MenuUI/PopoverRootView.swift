@@ -64,9 +64,15 @@ struct PopoverRootView: View {
     @State private var newGroupName = ""
     @State private var newGroupAssignTo: ClipboardItem.ID? = nil
 
-    // Live popover size; dragging the resize grip updates it (and persists it).
+    // Live popover size; dragging a resize edge/corner updates it (and persists).
     @State private var size = PopoverSize.saved()
     @State private var sizeAtDragStart: CGSize?
+
+    /// Width of the reserved right/bottom border where the resize handles live,
+    /// so they never overlap the rows (which manage their own pointing-hand
+    /// cursor). Without this reservation the two hover regions fight.
+    private static let edge: CGFloat = 8
+    private static let corner: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,8 +81,12 @@ struct PopoverRootView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .padding(.trailing, Self.edge)
+        .padding(.bottom, Self.edge)
+        .overlay(alignment: .trailing) { rightResizeHandle }
+        .overlay(alignment: .bottom) { bottomResizeHandle }
+        .overlay(alignment: .bottomTrailing) { cornerResizeHandle }
         .frame(width: size.width, height: size.height)
-        .overlay(alignment: .bottomTrailing) { resizeGrip }
         .alert("Nuevo grupo", isPresented: $showNewGroupAlert) {
             TextField("Nombre", text: $newGroupName)
             Button("Cancelar", role: .cancel) { newGroupName = "" }
@@ -84,36 +94,64 @@ struct PopoverRootView: View {
         }
     }
 
-    // MARK: - Resize grip
+    // MARK: - Resize handles
 
-    private var resizeGrip: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.secondary)
-            .padding(5)
+    private var rightResizeHandle: some View {
+        Color.clear
+            .frame(width: Self.edge)
+            .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .help("Arrastra para redimensionar")
-            .onContinuousHover { phase in
-                switch phase {
-                case .active: Cursors.resizeNWSE.set()
-                case .ended: NSCursor.arrow.set()
-                }
+            .onContinuousHover { setCursor($0, .resizeLeftRight) }
+            .gesture(resizeGesture(width: true, height: false))
+            .help("Arrastra para cambiar el ancho")
+    }
+
+    private var bottomResizeHandle: some View {
+        Color.clear
+            .frame(height: Self.edge)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onContinuousHover { setCursor($0, .resizeUpDown) }
+            .gesture(resizeGesture(width: false, height: true))
+            .help("Arrastra para cambiar el alto")
+    }
+
+    private var cornerResizeHandle: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Color.clear
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+                .padding(3)
+        }
+        .frame(width: Self.corner, height: Self.corner)
+        .contentShape(Rectangle())
+        .onContinuousHover { setCursor($0, Cursors.resizeNWSE) }
+        .gesture(resizeGesture(width: true, height: true))
+        .help("Arrastra para redimensionar")
+    }
+
+    private func setCursor(_ phase: HoverPhase, _ cursor: NSCursor) {
+        switch phase {
+        case .active: cursor.set()
+        case .ended: NSCursor.arrow.set()
+        }
+    }
+
+    private func resizeGesture(width: Bool, height: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                let base = sizeAtDragStart ?? size
+                if sizeAtDragStart == nil { sizeAtDragStart = size }
+                size = CGSize(
+                    width: width ? PopoverSize.clampWidth(base.width + value.translation.width) : base.width,
+                    height: height ? PopoverSize.clampHeight(base.height + value.translation.height) : base.height
+                )
             }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        let base = sizeAtDragStart ?? size
-                        if sizeAtDragStart == nil { sizeAtDragStart = size }
-                        size = CGSize(
-                            width: PopoverSize.clampWidth(base.width + value.translation.width),
-                            height: PopoverSize.clampHeight(base.height + value.translation.height)
-                        )
-                    }
-                    .onEnded { _ in
-                        sizeAtDragStart = nil
-                        PopoverSize.save(size)
-                    }
-            )
+            .onEnded { _ in
+                sizeAtDragStart = nil
+                PopoverSize.save(size)
+            }
     }
 
     // MARK: - Header
