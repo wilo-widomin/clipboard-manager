@@ -38,7 +38,7 @@ enum PopoverSize {
 
     static func saved() -> CGSize {
         let d = UserDefaults.standard
-        guard d.object(forKey: "popoverWidth") != nil else { return defaultSize }
+        guard d.object(forKey: "popoverWidth") != nil else { return clamp(defaultSize) }
         let w = clampWidth(CGFloat(d.double(forKey: "popoverWidth")))
         let h = clampHeight(CGFloat(d.double(forKey: "popoverHeight")))
         return CGSize(width: w, height: h)
@@ -49,8 +49,27 @@ enum PopoverSize {
         UserDefaults.standard.set(Double(size.height), forKey: "popoverHeight")
     }
 
-    static func clampWidth(_ v: CGFloat) -> CGFloat { min(max(v, minWidth), maxWidth) }
-    static func clampHeight(_ v: CGFloat) -> CGFloat { min(max(v, minHeight), maxHeight) }
+    static func clampWidth(_ v: CGFloat) -> CGFloat { min(max(v, minWidth), limits().width) }
+    static func clampHeight(_ v: CGFloat) -> CGFloat { min(max(v, minHeight), limits().height) }
+    static func clamp(_ s: CGSize) -> CGSize {
+        CGSize(width: clampWidth(s.width), height: clampHeight(s.height))
+    }
+
+    /// Upper bounds for the current display. A popover bigger than the visible
+    /// area is silently clipped by macOS — on short screens that swallowed the
+    /// header and the Texto/Imágenes/Grupos picker — so every size we hand out
+    /// is capped to what actually fits (minus the arrow + a margin). Never goes
+    /// below the minimums, so the clamp can't invert.
+    static func limits() -> CGSize {
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else {
+            return CGSize(width: maxWidth, height: maxHeight)
+        }
+        let visible = screen.visibleFrame
+        return CGSize(
+            width: max(minWidth, min(maxWidth, visible.width - 24)),
+            height: max(minHeight, min(maxHeight, visible.height - 24))
+        )
+    }
 }
 
 struct PopoverRootView: View {
@@ -87,6 +106,14 @@ struct PopoverRootView: View {
         .overlay(alignment: .bottom) { bottomResizeHandle }
         .overlay(alignment: .bottomTrailing) { cornerResizeHandle }
         .frame(width: size.width, height: size.height)
+        // Re-clamp to the screen every time the popover is shown and whenever the
+        // display setup changes: `saved()` re-reads the user's persisted size and
+        // caps it to what fits now, so shrinking the screen doesn't lose the size.
+        .onAppear { size = PopoverSize.saved() }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            size = PopoverSize.saved()
+        }
         .alert("Nuevo grupo", isPresented: $showNewGroupAlert) {
             TextField("Nombre", text: $newGroupName)
             Button("Cancelar", role: .cancel) { newGroupName = "" }
