@@ -111,6 +111,9 @@ final class StatusItemController: NSObject {
     private func showPopover(_ sender: NSStatusBarButton) {
         // Capture the paste target BEFORE activating ourselves.
         pasteTarget = resolvePasteTarget()
+        // Record which display the icon was clicked on: it bounds how tall the
+        // popover may be, and the content re-clamps to it as it appears.
+        PopoverSize.activeScreen = sender.window?.screen
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()

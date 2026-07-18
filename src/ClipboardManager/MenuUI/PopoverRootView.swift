@@ -33,8 +33,17 @@ enum PopoverSize {
     static let minWidth: CGFloat = 300
     static let minHeight: CGFloat = 260
     static let maxWidth: CGFloat = 760
-    static let maxHeight: CGFloat = 1000
     static let defaultSize = CGSize(width: 340, height: 460)
+
+    /// Room left around the popover inside the screen's visible area: the
+    /// menu-bar arrow plus a little breathing space.
+    private static let screenMargin: CGFloat = 24
+
+    /// Screen the status item was clicked on. `StatusItemController` sets it
+    /// right before showing the popover, because that's the display the popover
+    /// opens on — `NSScreen.main` follows the key window and, in an LSUIElement
+    /// app that isn't active yet, can easily point at a different one.
+    static var activeScreen: NSScreen?
 
     static func saved() -> CGSize {
         let d = UserDefaults.standard
@@ -55,19 +64,20 @@ enum PopoverSize {
         CGSize(width: clampWidth(s.width), height: clampHeight(s.height))
     }
 
-    /// Upper bounds for the current display. A popover bigger than the visible
-    /// area is silently clipped by macOS — on short screens that swallowed the
-    /// header and the Texto/Imágenes/Grupos picker — so every size we hand out
-    /// is capped to what actually fits (minus the arrow + a margin). Never goes
-    /// below the minimums, so the clamp can't invert.
+    /// Upper bounds for the display the popover opens on. A popover bigger than
+    /// the visible area is silently clipped by macOS — on short screens that
+    /// swallowed the header and the Texto/Imágenes/Grupos picker — so every size
+    /// we hand out is capped to what actually fits. Height has no fixed ceiling:
+    /// on a tall screen you can drag it all the way down. Never goes below the
+    /// minimums, so the clamp can't invert.
     static func limits() -> CGSize {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else {
-            return CGSize(width: maxWidth, height: maxHeight)
+        guard let screen = activeScreen ?? NSScreen.main ?? NSScreen.screens.first else {
+            return CGSize(width: maxWidth, height: minHeight)
         }
         let visible = screen.visibleFrame
         return CGSize(
-            width: max(minWidth, min(maxWidth, visible.width - 24)),
-            height: max(minHeight, min(maxHeight, visible.height - 24))
+            width: max(minWidth, min(maxWidth, visible.width - screenMargin)),
+            height: max(minHeight, visible.height - screenMargin)
         )
     }
 }
