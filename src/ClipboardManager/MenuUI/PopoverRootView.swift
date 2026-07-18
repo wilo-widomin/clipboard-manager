@@ -233,7 +233,8 @@ struct PopoverRootView: View {
                 if items.isEmpty {
                     emptyLabel(store.items.contains { $0.contentType == .text } ? "Sin textos visibles (filtrados)" : "Sin textos")
                 }
-                ForEach(items) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if needsFavoriteDivider(items, index) { favoriteDivider }
                     ClipboardTextRow(
                         item: item,
                         groups: store.groups,
@@ -256,7 +257,8 @@ struct PopoverRootView: View {
                 if items.isEmpty {
                     emptyLabel(store.items.contains { $0.contentType == .image } ? "Sin imágenes visibles (filtradas)" : "Sin imágenes")
                 }
-                ForEach(items) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if needsFavoriteDivider(items, index) { favoriteDivider }
                     ClipboardImageRow(
                         item: item,
                         groups: store.groups,
@@ -271,6 +273,16 @@ struct PopoverRootView: View {
             }
             .padding(6)
         }
+    }
+
+    /// The lists are sorted favourites-first, so the boundary between the two
+    /// blocks is the first non-favourite that follows a favourite.
+    private func needsFavoriteDivider(_ items: [ClipboardItem], _ index: Int) -> Bool {
+        index > 0 && !items[index].isFavorite && items[index - 1].isFavorite
+    }
+
+    private var favoriteDivider: some View {
+        Divider().padding(.vertical, 4)
     }
 
     private func emptyLabel(_ text: String) -> some View {
