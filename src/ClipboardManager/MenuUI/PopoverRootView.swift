@@ -281,8 +281,14 @@ struct PopoverRootView: View {
         index > 0 && !items[index].isFavorite && items[index - 1].isFavorite
     }
 
+    /// Deliberately heavier than a stock `Divider` (which is 1pt and very faint):
+    /// this line separates two blocks, not two rows, so it has to read at a glance.
     private var favoriteDivider: some View {
-        Divider().padding(.vertical, 4)
+        Rectangle()
+            .fill(Color.primary.opacity(0.35))
+            .frame(maxWidth: .infinity)
+            .frame(height: 2)
+            .padding(.vertical, 4)
     }
 
     private func emptyLabel(_ text: String) -> some View {
