@@ -1,6 +1,6 @@
 # Clipboard Manager
 
-Gestor de portapapeles para macOS que vive en la barra de menús. Captura automáticamente los últimos 100 elementos copiados (texto e imágenes), permite marcar favoritos y navegar entre vistas.
+Gestor de portapapeles para macOS que vive en la barra de menús. Captura automáticamente los últimos elementos copiados (texto e imágenes), permite marcar favoritos y navegar entre vistas.
 
 ## Requisitos
 
@@ -30,8 +30,10 @@ clipboard-manager/
 ## Funcionalidades principales
 
 - ✅ Captura automática de texto e imágenes del portapapeles
-- ✅ Hasta 100 items, ordenados del más reciente al más antiguo
-- ✅ Favoritos (⭐) siempre al principio de la lista
+- ✅ Hasta 50 textos y 20 imágenes (límite por tipo, no global), ordenados del más
+  reciente al más antiguo; al llenarse cae el **no favorito** más antiguo de ese tipo
+- ✅ Favoritos (⭐) siempre al principio de la lista, separados del resto por una línea;
+  nunca se descartan, así que marcar favoritos puede superar el límite del tipo
 - ✅ Grupos para favoritos: botón 📁 en cada item para asignarlo/reasignarlo, vista
   "Grupos" para crear/renombrar (inline)/eliminar, y checkbox por grupo para filtrar
   qué ítems se muestran en las listas de Texto/Imágenes

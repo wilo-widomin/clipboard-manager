@@ -3,8 +3,10 @@
 //  ClipboardManager
 //
 //  ObservableObject single source of truth for all clipboard items.
-//  Holds up to `maxItems` entries. Favourites always sort first,
-//  then the rest — both groups ordered by creation date descending.
+//  Capped per content type (50 text, 20 images), never globally; only
+//  non-favourites are evicted, so favourites can push a type past its
+//  limit. Favourites always sort first, then the rest — both groups
+//  ordered by creation date descending.
 //
 
 import Foundation

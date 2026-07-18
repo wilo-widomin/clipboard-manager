@@ -1,6 +1,6 @@
 # Clipboard Manager
 
-macOS menubar app for clipboard history — text & images, favorites, groups, 100 items.
+macOS menubar app for clipboard history — text & images, favorites, groups.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ src/ClipboardManager/
 ├── Models/
 │   ├── ClipboardItem.swift    — item model (text/image, favorite, date, groupID)
 │   ├── ClipboardGroup.swift   — group model (id, name, isFilterEnabled)
-│   └── ClipboardStore.swift   — ObservableObject, max 100 items, fav sorting, groups
+│   └── ClipboardStore.swift   — ObservableObject, per-type caps, fav sorting, groups
 ├── Monitor/
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
@@ -59,7 +59,7 @@ live in the status-item right-click menu).
 
 - **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional). `groupID` is optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
-- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc). Max 100. `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally; `cap` evicts the oldest **non-favourite** of that type, so favourites can push a type past its limit (and dropping an image deletes its PNG). `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
 
 ## Groups
 
