@@ -288,7 +288,7 @@ struct PopoverRootView: View {
             .fill(Color.primary.opacity(0.35))
             .frame(maxWidth: .infinity)
             .frame(height: 2)
-            .padding(.vertical, 4)
+            .padding(.vertical, 10)
     }
 
     private func emptyLabel(_ text: String) -> some View {
