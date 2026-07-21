@@ -22,6 +22,7 @@ import SwiftUI
 struct PopoverActions {
     let selectItem: (ClipboardItem) -> Void
     let quickLook: (ClipboardItem) -> Void
+    let editDetail: (ClipboardItem) -> Void
 }
 
 /// Manages the menu-bar status item and its popover.
@@ -85,7 +86,8 @@ final class StatusItemController: NSObject {
     private func makeActions() -> PopoverActions {
         PopoverActions(
             selectItem: { [weak self] item in self?.selectItem(item) },
-            quickLook: { [weak self] item in self?.quickLook(item) }
+            quickLook: { [weak self] item in self?.quickLook(item) },
+            editDetail: { [weak self] item in self?.editDetail(item) }
         )
     }
 
@@ -181,6 +183,19 @@ final class StatusItemController: NSObject {
             if let image = item.loadImage() {
                 PasteboardHelper.copyAndPaste(image: image, reactivating: target)
             }
+        }
+    }
+
+    /// Right-click on a row: require the macOS user's credentials, then open
+    /// the detail editor. Authentication is cached briefly (see `Authenticator`),
+    /// so editing several items in a row won't re-prompt each time. The
+    /// completion runs on the main queue.
+    private func editDetail(_ item: ClipboardItem) {
+        Authenticator.shared.authenticate(
+            reason: "Autentícate para editar el detalle de este elemento"
+        ) { [weak self] granted in
+            guard let self, granted else { return }
+            DetailEditorWindowController.show(item: item, store: self.store)
         }
     }
 

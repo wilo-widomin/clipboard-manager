@@ -249,6 +249,7 @@ struct PopoverRootView: View {
                         item: item,
                         groups: store.groups,
                         onSelect: { actions.selectItem(item) },
+                        onEditDetail: { actions.editDetail(item) },
                         onToggleFavorite: { store.toggleFavorite(id: item.id) },
                         onDelete: { store.remove(id: item.id) },
                         onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
@@ -273,6 +274,7 @@ struct PopoverRootView: View {
                         item: item,
                         groups: store.groups,
                         onSelect: { actions.selectItem(item) },
+                        onEditDetail: { actions.editDetail(item) },
                         onQuickLook: { actions.quickLook(item) },
                         onToggleFavorite: { store.toggleFavorite(id: item.id) },
                         onDelete: { store.remove(id: item.id) },
@@ -362,12 +364,29 @@ struct GroupAssignmentMenu: View {
     }
 }
 
+// MARK: - Detail indicator (shared by text & image rows)
+
+/// Small note glyph shown when an item carries a detail note. The note text is
+/// surfaced as a tooltip. Hidden entirely for items without a detail.
+struct DetailIndicator: View {
+    let item: ClipboardItem
+
+    var body: some View {
+        if item.hasDetail {
+            Image(systemName: "note.text")
+                .foregroundStyle(.secondary)
+                .help(item.detail ?? "")
+        }
+    }
+}
+
 // MARK: - Text row
 
 struct ClipboardTextRow: View {
     let item: ClipboardItem
     let groups: [ClipboardGroup]
     let onSelect: () -> Void
+    let onEditDetail: () -> Void
     let onToggleFavorite: () -> Void
     let onDelete: () -> Void
     let onAssign: (UUID?) -> Void
@@ -382,6 +401,7 @@ struct ClipboardTextRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 4)
+            DetailIndicator(item: item)
             groupMenu
             favoriteButton
             Button(action: onDelete) { Image(systemName: "trash") }
@@ -400,6 +420,8 @@ struct ClipboardTextRow: View {
             }
         }
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
+        .overlay(RightClickCatcher(action: onEditDetail))
+        .help("Clic derecho para editar el detalle")
     }
 
     private var groupMenu: some View {
@@ -431,6 +453,7 @@ struct ClipboardImageRow: View {
     let item: ClipboardItem
     let groups: [ClipboardGroup]
     let onSelect: () -> Void
+    let onEditDetail: () -> Void
     let onQuickLook: () -> Void
     let onToggleFavorite: () -> Void
     let onDelete: () -> Void
@@ -443,6 +466,7 @@ struct ClipboardImageRow: View {
         HStack(spacing: 10) {
             thumbnail
             Spacer(minLength: 4)
+            DetailIndicator(item: item)
             groupMenu
             favoriteButton
             Button(action: onQuickLook) { Image(systemName: "eye") }
@@ -465,6 +489,8 @@ struct ClipboardImageRow: View {
             }
         }
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
+        .overlay(RightClickCatcher(action: onEditDetail))
+        .help("Clic derecho para editar el detalle")
     }
 
     private var thumbnail: some View {

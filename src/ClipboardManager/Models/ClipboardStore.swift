@@ -217,6 +217,17 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
+    /// Sets (or clears) the free-text detail note on an item. Whitespace-only
+    /// input clears the note (stored as `nil`). Order is unaffected, so no
+    /// re-sort — just persist. Editing is gated by the caller behind
+    /// authentication (see `Authenticator`).
+    public func setDetail(id: ClipboardItem.ID, detail: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        items[idx].detail = trimmed.isEmpty ? nil : trimmed
+        persist()
+    }
+
     /// Clears all non-favourite items. Also deletes their image files from disk.
     public func clearNonFavorites() {
         let before = items.count

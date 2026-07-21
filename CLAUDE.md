@@ -40,6 +40,8 @@ src/ClipboardManager/
 │   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
 │   ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
 │   ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
+│   ├── Authenticator.swift           — LocalAuthentication gate (Touch ID / macOS password), cached
+│   ├── DetailEditorWindowController.swift — detail-note editor window + RightClickCatcher
 │   ├── AboutView.swift / AboutWindowController.swift
 └── Resources/
     └── (icons will go here)
@@ -57,7 +59,7 @@ live in the status-item right-click menu).
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional). `groupID` is optional so older `store.json` files decode cleanly.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
 - **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally; `cap` evicts the oldest **non-favourite** of that type, so favourites can push a type past its limit (and dropping an image deletes its PNG). `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
 
@@ -75,6 +77,25 @@ live in the status-item right-click menu).
   filters which items appear in the Text/Images lists. This applies to **all** items:
   unchecking a group hides its items, and unchecking "Sin grupo" hides every ungrouped
   item (which includes all non-favourites, since only favourites can hold a group).
+
+## Detalle por item (protegido)
+
+- Each item can carry a free-text **detail note** (`ClipboardItem.detail`, optional).
+- **Right-click** on any text/image row opens the detail editor. Detection is a
+  `RightClickCatcher` (an `NSViewRepresentable` overlaid on the row whose `hitTest`
+  only claims `.rightMouseDown` events, so left-clicks/buttons/hover pass through).
+- Opening the editor is **gated by system authentication**: `Authenticator` uses
+  `LocalAuthentication` (`LAContext`, policy `.deviceOwnerAuthentication` = Touch ID
+  with macOS-password fallback). We store no password ourselves. A successful auth
+  is **cached ~5 min** so editing several items in a row doesn't re-prompt.
+- The editor is `DetailEditorWindowController` — its own small window (not a
+  popover sheet, because the auth dialog steals focus and would dismiss the
+  popover). It hosts `DetailEditorView` (a `TextEditor` + Cancelar/Guardar) and
+  saves via `store.setDetail(id:detail:)` (whitespace-only clears the note).
+- Rows show a `note.text` glyph (`DetailIndicator`) when the item has a detail,
+  with the note text as tooltip.
+- The auth flow goes through the controller (`PopoverActions.editDetail`), like
+  paste/Quick Look; the save is a plain data mutation straight to the store.
 
 ## Code Standards
 

@@ -38,6 +38,18 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     /// older build (which lack this key) decode cleanly as ungrouped.
     public var groupID: UUID? = nil
 
+    /// Free-text note the user attaches to the item via the right-click editor.
+    /// Editing is gated behind system authentication (Touch ID / macOS password).
+    /// Optional & defaulted so older `store.json` files decode cleanly, and so
+    /// the factory methods below need no extra argument.
+    public var detail: String? = nil
+
+    /// Whether the item carries a non-empty detail note.
+    public var hasDetail: Bool {
+        guard let detail = detail else { return false }
+        return !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     // MARK: - Preview helpers
 
     /// First 40 characters of the text, followed by "..." if truncated.
