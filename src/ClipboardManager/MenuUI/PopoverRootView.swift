@@ -93,6 +93,9 @@ struct PopoverRootView: View {
     @State private var newGroupName = ""
     @State private var newGroupAssignTo: ClipboardItem.ID? = nil
 
+    // Confirmation before the header trash wipes all non-favourites of a type.
+    @State private var confirmClearType: ClipboardContentType? = nil
+
     // Live popover size; dragging a resize edge/corner updates it (and persists).
     @State private var size = PopoverSize.saved()
     @State private var sizeAtDragStart: CGSize?
@@ -133,6 +136,26 @@ struct PopoverRootView: View {
             Button("Cancelar", role: .cancel) { newGroupName = "" }
             Button("Crear") { createGroup() }
         }
+        .alert(clearAlertTitle, isPresented: clearConfirmBinding) {
+            Button("Cancelar", role: .cancel) { confirmClearType = nil }
+            Button("Borrar", role: .destructive) {
+                if let type = confirmClearType { store.clearNonFavorites(ofType: type) }
+                confirmClearType = nil
+            }
+        } message: {
+            Text(confirmClearType == .image
+                 ? "Se borrarán todas las imágenes que no sean favoritas. Las favoritas se conservan."
+                 : "Se borrarán todos los textos que no sean favoritos. Los favoritos se conservan.")
+        }
+    }
+
+    // Drives the clear-non-favourites confirmation; presented when a type is set.
+    private var clearConfirmBinding: Binding<Bool> {
+        Binding(get: { confirmClearType != nil }, set: { if !$0 { confirmClearType = nil } })
+    }
+
+    private var clearAlertTitle: String {
+        confirmClearType == .image ? "¿Borrar imágenes no favoritas?" : "¿Borrar textos no favoritos?"
     }
 
     // MARK: - Resize handles
@@ -209,11 +232,11 @@ struct PopoverRootView: View {
 
             if store.viewMode == .text {
                 trashButton("Borrar textos no favoritos") {
-                    store.clearNonFavorites(ofType: .text)
+                    confirmClearType = .text
                 }
             } else if store.viewMode == .images {
                 trashButton("Borrar imágenes no favoritas") {
-                    store.clearNonFavorites(ofType: .image)
+                    confirmClearType = .image
                 }
             }
         }
