@@ -660,7 +660,7 @@ struct GroupManageRow: View {
             ))
             .labelsHidden()
             .toggleStyle(.checkbox)
-            .help("Mostrar/ocultar sus favoritos")
+            .help("Seleccionar para filtrar por este grupo")
 
             TextField("Nombre", text: $name)
                 .textFieldStyle(.plain)

@@ -33,13 +33,12 @@ public final class ClipboardStore: ObservableObject {
     /// User-defined groups. Favourites can be assigned to at most one each.
     @Published public private(set) var groups: [ClipboardGroup] = []
 
-    /// Whether ungrouped items (groupID == nil) are shown in the Text / Images
-    /// lists. Controlled by the "Sin grupo" checkbox in the Groups view.
-    @Published public var showUngrouped: Bool = true {
-        didSet {
-            UserDefaults.standard.set(showUngrouped, forKey: "showUngroupedFavorites")
-        }
-    }
+    /// Whether the "Sin grupo" filter is selected. Part of the group-filter
+    /// *selection*: when nothing is selected the filter is inactive and every
+    /// item shows; selecting "Sin grupo" narrows the lists to ungrouped items.
+    /// Controlled by the "Sin grupo" badge / checkbox. Deliberately **not**
+    /// persisted — the filter is a per-session aid that starts empty on launch.
+    @Published public var showUngrouped: Bool = false
 
     /// Which view the menu should show. Persisted in UserDefaults.
     @Published public var viewMode: ClipboardViewMode = .text {
@@ -60,12 +59,21 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// The group-checkbox filter, applied to **all** items: an item is hidden
-    /// when its group's checkbox is off, or (for ungrouped items — which includes
-    /// every non-favourite, since only favourites can hold a group) when the
-    /// "Sin grupo" checkbox is off. An item whose group was deleted is treated
-    /// as ungrouped.
+    /// Whether any group filter is currently selected. When false, the filter is
+    /// inactive and every item shows — the default, so a fresh popover lists
+    /// everything until the user taps a badge to narrow it.
+    public var isGroupFilterActive: Bool {
+        showUngrouped || groups.contains { $0.isFilterEnabled }
+    }
+
+    /// The group filter, applied to **all** items. It behaves like a set of OR
+    /// filter chips: with nothing selected every item passes; once at least one
+    /// badge is selected, an item passes only if its group is selected (or, for
+    /// ungrouped items — which includes every non-favourite, since only
+    /// favourites can hold a group — if "Sin grupo" is selected). An item whose
+    /// group was deleted is treated as ungrouped.
     public func passesGroupFilter(_ item: ClipboardItem) -> Bool {
+        guard isGroupFilterActive else { return true }
         if let gid = item.groupID, let group = groups.first(where: { $0.id == gid }) {
             return group.isFilterEnabled
         }
@@ -81,10 +89,8 @@ public final class ClipboardStore: ObservableObject {
            let mode = ClipboardViewMode(rawValue: raw) {
             self.viewMode = mode
         }
-        // Restore the "Sin grupo" filter toggle (defaults to shown).
-        if UserDefaults.standard.object(forKey: "showUngroupedFavorites") != nil {
-            self.showUngrouped = UserDefaults.standard.bool(forKey: "showUngroupedFavorites")
-        }
+        // The group filter (showUngrouped + each group's isFilterEnabled) is not
+        // restored: it starts empty every launch so the lists open showing all.
     }
 
     // MARK: - Loading
@@ -92,7 +98,9 @@ public final class ClipboardStore: ObservableObject {
     public func load() async {
         let loaded = await persistence.load()
         let loadedGroups = await persistence.loadGroups()
-        groups = loadedGroups
+        // Start every launch with the filter unselected (shows all), regardless
+        // of whatever selection was last written to groups.json.
+        groups = loadedGroups.map { var g = $0; g.isFilterEnabled = false; return g }
         // Enforce the per-type limits on load too, so a store that grew past
         // the limit under an older build (or a lowered limit) is normalised.
         items = capAllTypes(sort(loaded))

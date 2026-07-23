@@ -73,14 +73,20 @@ live in the status-item right-click menu).
   text field — the same alert backs "Nuevo grupo…" from the assignment menu, which then
   auto-assigns the new group to the item). Deleting a group keeps the items and only
   clears their `groupID`.
-- Each group's checkbox (and the fixed "Sin grupo" row, backed by `store.showUngrouped`)
-  filters which items appear in the Text/Images lists. This applies to **all** items:
-  unchecking a group hides its items, and unchecking "Sin grupo" hides every ungrouped
-  item (which includes all non-favourites, since only favourites can hold a group).
-- The same filters are also exposed as **badges** (`GroupFilterBadges`) in a horizontal
-  strip above the Texto/Imágenes lists (one per group + "Sin grupo", followed by a
-  `Divider`). Tapping a badge toggles the very same state as the Grupos checkbox;
-  a disabled filter is drawn hollow.
+- The group filter works like a set of **OR filter chips** (`passesGroupFilter` /
+  `isGroupFilterActive`): with **nothing selected the filter is inactive and every
+  item shows** — the default a fresh popover opens with. Selecting one or more chips
+  narrows the Text/Images lists to those groups (an item passes if its group is
+  selected, or — for ungrouped items, which includes every non-favourite since only
+  favourites can hold a group — if "Sin grupo" is selected).
+- The selection lives in each group's `isFilterEnabled` and `store.showUngrouped`, but
+  is **not persisted**: it resets to empty every launch (init doesn't restore it and
+  `load()` clears each loaded group's `isFilterEnabled`), so the app always opens
+  showing everything.
+- Two UIs drive the same selection: the **badges** (`GroupFilterBadges`) in a
+  horizontal strip above the Texto/Imágenes lists (one capsule per group + "Sin grupo",
+  followed by a `Divider`; a selected chip is filled with the accent colour, an
+  unselected one is drawn hollow), and the **checkboxes** in the Grupos tab.
 
 ## Detalle por item (protegido)
 
