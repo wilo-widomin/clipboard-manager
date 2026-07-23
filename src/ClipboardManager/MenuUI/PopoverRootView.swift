@@ -370,19 +370,23 @@ struct GroupFilterBadges: View {
     }
 
     private func badge(_ name: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        // Colours and tooltip are computed up front with explicit types: inline
+        // ternaries inside the modifier chain make the expression ambiguous
+        // (String vs LocalizedStringKey in `help`) and slow to type-check.
+        let fill: Color = on ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.12)
+        let stroke: Color = on ? Color.clear : Color.secondary.opacity(0.4)
+        let label: Color = on ? Color.white : Color.secondary
+        let tooltip: String = on ? "Ocultar «\(name)»" : "Mostrar «\(name)»"
+
+        return Button(action: action) {
             Text(name)
                 .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
+                .foregroundStyle(label)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(
-                    Capsule().fill(on ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.12))
-                )
-                .overlay(
-                    Capsule().strokeBorder(on ? Color.clear : Color.secondary.opacity(0.4), lineWidth: 1)
-                )
-                .foregroundStyle(on ? Color.white : Color.secondary)
+                .background(Capsule().fill(fill))
+                .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .onContinuousHover { phase in
@@ -391,7 +395,7 @@ struct GroupFilterBadges: View {
             case .ended: NSCursor.arrow.set()
             }
         }
-        .help(on ? "Ocultar «\(name)»" : "Mostrar «\(name)»")
+        .help(tooltip)
     }
 }
 
