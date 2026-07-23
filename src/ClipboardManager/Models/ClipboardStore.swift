@@ -314,6 +314,17 @@ public final class ClipboardStore: ObservableObject {
         persistGroups()
     }
 
+    /// Clears the whole group filter selection (every chip off) so the lists
+    /// show everything again. No-op — and no persist — when nothing is selected.
+    public func clearGroupFilter() {
+        guard isGroupFilterActive else { return }
+        showUngrouped = false
+        for idx in groups.indices where groups[idx].isFilterEnabled {
+            groups[idx].isFilterEnabled = false
+        }
+        persistGroups()
+    }
+
     /// Assigns an item to a group (or removes it from any group when `groupID`
     /// is nil). Assigning to a group also marks the item as a favourite, so it
     /// survives the per-type cap. Removing the group leaves the favourite flag

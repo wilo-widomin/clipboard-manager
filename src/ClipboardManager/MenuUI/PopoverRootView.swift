@@ -360,6 +360,7 @@ struct GroupFilterBadges: View {
                 badge("Sin grupo", on: store.showUngrouped) {
                     store.showUngrouped.toggle()
                 }
+                if store.isGroupFilterActive { clearBadge }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -367,6 +368,27 @@ struct GroupFilterBadges: View {
         // Without a fixed height the horizontal ScrollView happily eats the
         // vertical space the list needs.
         .frame(height: 30)
+    }
+
+    /// Last chip: clears the whole selection. Only shown while a filter is
+    /// active (there's nothing to clear otherwise).
+    private var clearBadge: some View {
+        Button(action: store.clearGroupFilter) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 11))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.secondary.opacity(0.12)))
+                .foregroundStyle(Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: NSCursor.pointingHand.set()
+            case .ended: NSCursor.arrow.set()
+            }
+        }
+        .help("Quitar todos los filtros")
     }
 
     private func badge(_ name: String, on: Bool, action: @escaping () -> Void) -> some View {
