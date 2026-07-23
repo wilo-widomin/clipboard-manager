@@ -77,6 +77,10 @@ live in the status-item right-click menu).
   filters which items appear in the Text/Images lists. This applies to **all** items:
   unchecking a group hides its items, and unchecking "Sin grupo" hides every ungrouped
   item (which includes all non-favourites, since only favourites can hold a group).
+- The same filters are also exposed as **badges** (`GroupFilterBadges`) in a horizontal
+  strip above the Texto/Imágenes lists (one per group + "Sin grupo", followed by a
+  `Divider`). Tapping a badge toggles the very same state as the Grupos checkbox;
+  a disabled filter is drawn hollow.
 
 ## Detalle por item (protegido)
 

@@ -107,6 +107,10 @@ struct PopoverRootView: View {
         VStack(spacing: 0) {
             header
             Divider()
+            if store.viewMode != .groups {
+                GroupFilterBadges(store: store)
+                Divider()
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -333,6 +337,61 @@ struct PopoverRootView: View {
             store.assignGroup(itemID: itemID, groupID: id)
         }
         newGroupAssignTo = nil
+    }
+}
+
+// MARK: - Group filter badges
+
+/// Compact, tappable badges above the Texto/Imágenes lists — one per group plus
+/// a fixed "Sin grupo" — that toggle exactly the same filters as the checkboxes
+/// in the Grupos tab (`isFilterEnabled` / `store.showUngrouped`). An "off" badge
+/// is drawn hollow, so the enabled/disabled state reads at a glance.
+struct GroupFilterBadges: View {
+    @ObservedObject var store: ClipboardStore
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(store.groups) { group in
+                    badge(group.name, on: group.isFilterEnabled) {
+                        store.toggleGroupFilter(id: group.id)
+                    }
+                }
+                badge("Sin grupo", on: store.showUngrouped) {
+                    store.showUngrouped.toggle()
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        // Without a fixed height the horizontal ScrollView happily eats the
+        // vertical space the list needs.
+        .frame(height: 30)
+    }
+
+    private func badge(_ name: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(name)
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule().fill(on ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.12))
+                )
+                .overlay(
+                    Capsule().strokeBorder(on ? Color.clear : Color.secondary.opacity(0.4), lineWidth: 1)
+                )
+                .foregroundStyle(on ? Color.white : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: NSCursor.pointingHand.set()
+            case .ended: NSCursor.arrow.set()
+            }
+        }
+        .help(on ? "Ocultar «\(name)»" : "Mostrar «\(name)»")
     }
 }
 
