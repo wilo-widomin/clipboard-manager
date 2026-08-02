@@ -2,11 +2,10 @@
 //  DetailEditorWindowController.swift
 //  ClipboardManager
 //
-//  The "detail note" editor: a small modal-style window with a text area where
-//  the user writes a free-text note for a clipboard item. Presented as its own
-//  window (like About) rather than a sheet/popover-overlay because opening it
-//  goes through system authentication, whose dialog steals focus and would
-//  otherwise dismiss the transient-style popover mid-flow.
+//  The item editor: a small window with two text areas — the captured text
+//  itself (text items only) and a free-text note. Presented as its own window
+//  (like About) rather than a sheet/popover-overlay because taking focus would
+//  dismiss the transient-style popover mid-edit.
 //
 
 import AppKit
@@ -33,16 +32,19 @@ final class DetailEditorWindowController: NSObject {
     private func present(item: ClipboardItem, store: ClipboardStore) {
         let root = DetailEditorView(
             itemID: item.id,
-            heading: item.contentType == .image ? "Imagen" : item.textPreview,
+            isText: item.contentType == .text,
             store: store,
             onClose: { [weak self] in self?.close() }
         )
         let hosting = NSHostingController(rootView: root)
         let win = NSWindow(contentViewController: hosting)
-        win.title = "Detalle"
-        win.styleMask = [.titled, .closable]
+        win.title = item.contentType == .text ? "Editar elemento" : "Detalle"
+        // Resizable: the captured text can be long, and the two areas grow with
+        // the window.
+        win.styleMask = [.titled, .closable, .resizable]
         win.isReleasedWhenClosed = false
         win.delegate = self
+        win.setContentSize(NSSize(width: 460, height: item.contentType == .text ? 520 : 320))
         win.center()
 
         self.window = win
@@ -64,60 +66,80 @@ extension DetailEditorWindowController: NSWindowDelegate {
 
 // MARK: - Editor content
 
-/// SwiftUI content of the detail editor: a heading identifying the item, a
-/// multi-line text area, and Cancelar / Guardar. Saving trims the text and
-/// persists it (empty clears the note).
+/// SwiftUI content of the editor: for a text item, the captured text itself and
+/// the note, each in its own multi-line area; for an image item, only the note.
+/// Saving persists both — the note trimmed (empty clears it), the text verbatim.
 struct DetailEditorView: View {
     let itemID: ClipboardItem.ID
-    /// Short label identifying which item is being annotated.
-    let heading: String
+    /// Image items have no text to rewrite, so they only get the note area.
+    let isText: Bool
     @ObservedObject var store: ClipboardStore
     let onClose: () -> Void
 
-    @State private var text: String
+    @State private var content: String
+    @State private var note: String
 
-    init(itemID: ClipboardItem.ID, heading: String, store: ClipboardStore, onClose: @escaping () -> Void) {
+    init(itemID: ClipboardItem.ID, isText: Bool, store: ClipboardStore, onClose: @escaping () -> Void) {
         self.itemID = itemID
-        self.heading = heading
+        self.isText = isText
         self._store = ObservedObject(wrappedValue: store)
         self.onClose = onClose
-        // Seed the editor with any existing note for this item.
-        let existing = store.items.first(where: { $0.id == itemID })?.detail ?? ""
-        self._text = State(initialValue: existing)
+        // Seed both editors from the item as it stands now.
+        let item = store.items.first(where: { $0.id == itemID })
+        self._content = State(initialValue: item?.textContent ?? "")
+        self._note = State(initialValue: item?.detail ?? "")
+    }
+
+    /// Blanking a text item would leave a ghost row, so Guardar is blocked
+    /// instead (`setTextContent` rejects it too).
+    private var canSave: Bool {
+        !isText || !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Detalle")
-                .font(.headline)
+            if isText {
+                section("Texto copiado", text: $content, minHeight: 180)
+            } else {
+                Text("Imagen")
+                    .font(.headline)
+            }
 
-            Text(heading.isEmpty ? "Elemento" : heading)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .truncationMode(.tail)
-
-            TextEditor(text: $text)
-                .font(.system(size: 13))
-                .frame(minHeight: 160)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                )
+            section("Detalle", text: $note, minHeight: 120)
 
             HStack {
                 Spacer()
                 Button("Cancelar", role: .cancel) { onClose() }
                     .keyboardShortcut(.cancelAction)
-                Button("Guardar") {
-                    store.setDetail(id: itemID, detail: text)
-                    onClose()
-                }
-                .keyboardShortcut(.defaultAction)
+                Button("Guardar", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
             }
         }
         .padding(16)
-        .frame(width: 420)
+        .frame(minWidth: 380, maxWidth: .infinity,
+               minHeight: isText ? 400 : 240, maxHeight: .infinity)
+    }
+
+    private func section(_ title: String, text: Binding<String>, minHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+            TextEditor(text: text)
+                .font(.system(size: 13))
+                .frame(minHeight: minHeight, maxHeight: .infinity)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+        }
+    }
+
+    private func save() {
+        guard canSave else { return }
+        if isText { store.setTextContent(id: itemID, text: content) }
+        store.setDetail(id: itemID, detail: note)
+        onClose()
     }
 }
 

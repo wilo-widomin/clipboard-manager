@@ -232,6 +232,18 @@ public final class ClipboardStore: ObservableObject {
     /// Sets (or clears) the free-text detail note on an item. Whitespace-only
     /// input clears the note (stored as `nil`). Order is unaffected, so no
     /// re-sort — just persist.
+    /// Rewrites the captured text of a text item (the right-click editor). Stored
+    /// verbatim — only the emptiness check is trimmed, and a blank result is
+    /// rejected rather than leaving a ghost row. Neither the date nor the order
+    /// change: editing shouldn't bump an item to the top.
+    public func setTextContent(id: ClipboardItem.ID, text: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }),
+              items[idx].contentType == .text,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        items[idx].textContent = text
+        persist()
+    }
+
     public func setDetail(id: ClipboardItem.ID, detail: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)

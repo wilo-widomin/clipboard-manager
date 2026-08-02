@@ -26,18 +26,19 @@
 | US-13 | Como usuario, quiero gestionar y filtrar por grupos | La vista Grupos permite crear, renombrar (inline) y borrar grupos. Cada checkbox filtra qué items aparecen en las listas de texto/imágenes. Borrar un grupo conserva sus items (solo pierden el grupo) |
 | US-14 | Como usuario, quiero filtrar por grupo sin salir de la lista | Sobre las listas hay un chip por grupo más "Sin grupo". Sin nada marcado se ve todo; marcando uno o varios, la lista queda reducida a esos (OR). El chip ✕ limpia la selección, que no se conserva entre arranques |
 | US-15 | Como usuario, quiero llegar a todos los chips aunque no quepan | Cuando la tira desborda aparecen flechas ‹ / › que la desplazan; cada flecha se oculta al agotarse ese lado y ambas desaparecen si todos los chips caben |
-| US-16 | Como usuario, quiero anotar un item con información extra | Clic derecho en la fila abre un editor de texto libre en su propia ventana. Las filas con nota muestran un indicador con la nota como tooltip. Guardar una nota vacía la borra. La nota se guarda en claro, no es para secretos |
+| US-16 | Como usuario, quiero anotar un item con información extra | Clic derecho en la fila abre un editor en su propia ventana con un área para la nota. Las filas con nota muestran un indicador con la nota como tooltip. Guardar una nota vacía la borra. La nota se guarda en claro, no es para secretos |
+| US-17 | Como usuario, quiero corregir el texto que copié | El mismo editor incluye, para los items de texto, un área multilínea con el contenido capturado. Al guardar, la lista y el pegado usan el texto nuevo; la fecha y la posición no cambian. Dejarlo vacío no se permite (Guardar deshabilitado). En imágenes esa área no aparece |
 
 ### Could Have
 
 | ID | Historia | Criterios de aceptación |
 |---|---|---|
-| US-17 | Como usuario, quiero redimensionar el popover a mi gusto | El popover se ajusta arrastrando el borde derecho (ancho), el inferior (alto) o la esquina (ambos). El tamaño se persiste y se recorta a lo que quepa en la pantalla del icono |
+| US-18 | Como usuario, quiero redimensionar el popover a mi gusto | El popover se ajusta arrastrando el borde derecho (ancho), el inferior (alto) o la esquina (ambos). El tamaño se persiste y se recorta a lo que quepa en la pantalla del icono |
 
 ### Won't Have (para esta versión)
 
 | ID | Historia |
 |---|---|
-| US-18 | Sincronización entre dispositivos |
-| US-19 | Búsqueda en la lista |
-| US-20 | Atajos de teclado para pegar items específicos |
+| US-19 | Sincronización entre dispositivos |
+| US-20 | Búsqueda en la lista |
+| US-21 | Atajos de teclado para pegar items específicos |

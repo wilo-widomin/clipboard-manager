@@ -12,7 +12,7 @@ flowchart TD
         PR[PopoverRootView\nSwiftUI]
         ROWS[Filas Texto/Imagen\n+ vista Grupos]
         CHIPS[GroupFilterBadges\nchips + flechas ‹ ›]
-        DET[DetailEditorWindow\neditor de nota]
+        DET[DetailEditorWindow\ntexto capturado + nota]
     end
 
     subgraph "Monitorización"
@@ -54,7 +54,7 @@ flowchart TD
     ROWS -->|clic imagen 👁| QL
     ROWS -->|clic item| TGT
     ROWS -->|clic derecho| DET
-    DET -->|guarda detail| CS
+    DET -->|guarda texto/detail| CS
 ```
 
 ## Flujo de datos
@@ -78,7 +78,7 @@ Popover (NSPopover + SwiftUI)
 ├── Vista Imágenes → filas [miniatura] [📝?] [👁] [📁] [⭐] [🗑]
 └── Vista Grupos   → crear / renombrar / borrar + checkbox de filtro
 
-Clic derecho en una fila → ventana de nota de detalle
+Clic derecho en una fila → ventana de edición (texto capturado + nota de detalle)
 
 Clic derecho en el icono de barra → NSMenu nativo
 ├── Abrir

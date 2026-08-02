@@ -40,7 +40,7 @@ src/ClipboardManager/
 │   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
 │   ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
 │   ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
-│   ├── DetailEditorWindowController.swift — detail-note editor window + RightClickCatcher
+│   ├── DetailEditorWindowController.swift — item editor window (texto + detalle) + RightClickCatcher
 │   ├── AboutView.swift / AboutWindowController.swift
 └── Resources/
     └── (icons will go here)
@@ -93,16 +93,21 @@ live in the status-item right-click menu).
   exhausted, and both vanish when every chip fits (`overflows`, from content width —
   measured with `ContentWidthKey` — vs viewport width).
 
-## Detalle por item
+## Editor por item (texto + detalle)
 
 - Each item can carry a free-text **detail note** (`ClipboardItem.detail`, optional).
-- **Right-click** on any text/image row opens the detail editor. Detection is a
+- **Right-click** on any text/image row opens the editor. Detection is a
   `RightClickCatcher` (an `NSViewRepresentable` overlaid on the row whose `hitTest`
   only claims `.rightMouseDown` events, so left-clicks/buttons/hover pass through).
 - The editor is `DetailEditorWindowController` — its own small window rather than a
   popover sheet, since taking focus would dismiss the popover. It hosts
-  `DetailEditorView` (a `TextEditor` + Cancelar/Guardar) and saves via
-  `store.setDetail(id:detail:)` (whitespace-only clears the note).
+  `DetailEditorView`: for a **text** item two `TextEditor`s (the captured text and
+  the note), for an **image** item only the note. The window is `.resizable` and both
+  areas grow with it, because the captured text can be long.
+- Saving writes the note via `store.setDetail(id:detail:)` (whitespace-only clears it)
+  and, for text items, the content via `store.setTextContent(id:text:)` — stored
+  verbatim, **rejected if blank** (Guardar is disabled too, so an edit can't leave a
+  ghost row), and it touches neither `createdAt` nor the order.
 - Rows show a `note.text` glyph (`DetailIndicator`) when the item has a detail,
   with the note text as tooltip.
 - Opening the editor goes through the controller (`PopoverActions.editDetail`), like

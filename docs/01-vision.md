@@ -10,7 +10,7 @@ Proporcionar un gestor de portapapeles ligero y siempre accesible desde la barra
 - Navegar entre vista de texto, imágenes y grupos mediante un selector segmentado
 - Visualizar imágenes en miniatura y abrirlas en Vista Previa (Quick Look) de macOS
 - Pegar cualquier elemento en la app activa con un clic
-- Guardar una nota de detalle por elemento
+- Editar el texto capturado y guardar una nota de detalle por elemento
 
 ## In-Scope (lo que el sistema SÍ hará)
 
@@ -24,7 +24,7 @@ Proporcionar un gestor de portapapeles ligero y siempre accesible desde la barra
 | Grupos | Asignar un favorito a un grupo (📁). Asignar grupo auto-favorita el item. La vista Grupos permite crear, renombrar y borrar grupos, y filtrar la lista con checkboxes |
 | Filtro por chips | Encima de las listas, una tira de chips (un grupo cada uno + "Sin grupo") con la misma selección que los checkboxes: sin nada marcado se ve todo; marcando uno o varios, la lista se reduce a esos (OR). Un chip ✕ limpia la selección, que además no se persiste entre arranques |
 | Pegar con un clic | Al clicar un item se copia al portapapeles y se pega (Cmd+V) en la app que estaba activa |
-| Nota de detalle | Clic derecho en una fila abre un editor de texto libre asociado al item. Las filas con nota muestran un indicador con la nota como tooltip |
+| Editor del item | Clic derecho en una fila abre una ventana redimensionable con dos áreas de texto: el texto capturado (editable; en imágenes no aparece) y una nota de detalle libre. Las filas con nota muestran un indicador con la nota como tooltip |
 | Eliminación | Botón 🗑 para eliminar un item individual (directo, sin confirmación) y botón de cabecera para vaciar los no-favoritos de la vista actual (con confirmación) |
 | Selector de vista | Picker segmentado Texto / Imágenes / Grupos |
 | Quick Look de imágenes | El botón 👁 abre la imagen en Quick Look (`qlmanage -p`) sin cerrar el popover |
@@ -32,8 +32,9 @@ Proporcionar un gestor de portapapeles ligero y siempre accesible desde la barra
 | Persistencia JSON | Los items se guardan en `~/Library/Application Support/ClipboardManager/store.json`; los grupos en `groups.json`; las imágenes como PNG en disco |
 | Agente sin Dock | La app corre como `LSUIElement` (sin icono en el Dock) |
 
-> La nota de detalle se guarda **en claro** en `store.json`. No es un almacén de
-> secretos, y por eso tampoco tiene sentido protegerla con autenticación.
+> Tanto el texto como la nota de detalle se guardan **en claro** en `store.json`. No
+> es un almacén de secretos, y por eso tampoco tiene sentido protegerlo con
+> autenticación.
 
 ## Out-of-Scope (lo que NO hará)
 

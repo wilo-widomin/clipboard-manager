@@ -23,8 +23,9 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     public let contentType: ClipboardContentType
     public let createdAt: Date
 
-    /// The text content (nil for image items).
-    public let textContent: String?
+    /// The text content (nil for image items). Mutable because the right-click
+    /// editor lets the user rewrite what was captured.
+    public var textContent: String?
 
     /// Filename of the PNG file on disk, relative to the images directory.
     /// Example: "E621F1A2-4B3C-4D5E-8F9A-0B1C2D3E4F5F.png"
