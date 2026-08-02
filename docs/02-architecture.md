@@ -14,8 +14,7 @@
 | Monitorización | Polling de `NSPasteboard.changeCount` | Única forma fiable en macOS; comparar un entero cada 1s tiene coste despreciable |
 | Pegar en la app activa | Copiar + reactivar target + `Cmd+V` sintético | Al mostrar el popover se activa la app, por eso el target se captura *antes* de mostrarlo |
 | Quick Look | `qlmanage -p` vía `Process` | Lanzador externo que no bloquea el popover |
-| Acceso a la nota de detalle | `LocalAuthentication` (`LAContext`, `.deviceOwnerAuthentication`) | Reutiliza Touch ID / la contraseña de macOS: la app no guarda ni valida credenciales propias |
-| Editor de la nota | Ventana propia (`DetailEditorWindowController`) | El diálogo de autenticación roba el foco y cerraría el popover, así que el editor no puede vivir dentro de él |
+| Editor de la nota | Ventana propia (`DetailEditorWindowController`) | Un editor dentro del popover se lo cargaría al tomar el foco; una ventana aparte sobrevive al cierre del popover |
 | Clic derecho en las filas | `RightClickCatcher` (`NSViewRepresentable`) superpuesto | Su `hitTest` solo reclama `.rightMouseDown`, de modo que clics izquierdos, botones y hover siguen llegando a la fila SwiftUI |
 | Tira de chips de filtro | Desplazamiento propio por flechas, no `ScrollView` | Con pocos chips no se ve ningún control; el paginado por `‹`/`›` es más legible en 30pt de alto que una barra de scroll horizontal |
 
@@ -48,8 +47,8 @@ La selección vive en `isFilterEnabled` de cada grupo más `store.showUngrouped`
 ### 7. Desplazamiento de los chips por flechas
 La tira se maqueta a su ancho intrínseco (`fixedSize`) dentro de un `GeometryReader`, se desplaza con un `offset` y se recorta. Las flechas `‹`/`›` pasan ~80% del ancho visible, se ocultan cuando ese lado se agota y desaparecen ambas si todos los chips caben. Como `clipped()` no recorta el *hit-testing*, hace falta `contentShape(Rectangle())` para que los chips fuera de vista no roben los clics de las flechas.
 
-### 8. Nota de detalle protegida
-Cada item puede llevar una nota libre (`ClipboardItem.detail`, opcional). Abrir el editor exige pasar `Authenticator` (Touch ID con reserva de contraseña de macOS); un éxito se cachea ~5 min para no repreguntar al editar varios items seguidos. La nota se guarda en claro en `store.json`: la barrera es de acceso a la UI, no cifrado.
+### 8. Nota de detalle sin autenticación
+Cada item puede llevar una nota libre (`ClipboardItem.detail`, opcional) que se edita con clic derecho. Una versión anterior exigía autenticarse con `LocalAuthentication` (Touch ID / contraseña de macOS) para abrir el editor; se retiró porque la nota se guarda **en claro** en `store.json` y cualquiera con acceso al disco la lee sin pasar por la app: el diálogo aportaba fricción, no seguridad. Volver a poner una barrera solo tendría sentido junto con cifrado de la nota (o guardarla en el Keychain).
 
 ### 9. Confirmación solo en el borrado masivo
 Eliminar un item suelto es directo (🗑, sin confirmación): la pérdida es mínima. Vaciar los no-favoritos de una vista entera sí pide confirmación, e indica que los favoritos se conservan.
@@ -81,7 +80,6 @@ clipboard-manager/
 │       │   ├── StatusItemController.swift    ← NSStatusItem + NSPopover
 │       │   ├── PopoverRootView.swift         ← vistas, filas y chips de filtro
 │       │   ├── PasteboardHelper.swift        ← copiar + Cmd+V
-│       │   ├── Authenticator.swift           ← LocalAuthentication (caché ~5 min)
 │       │   ├── DetailEditorWindowController.swift ← editor de nota + RightClickCatcher
 │       │   ├── AboutView.swift
 │       │   └── AboutWindowController.swift

@@ -186,17 +186,10 @@ final class StatusItemController: NSObject {
         }
     }
 
-    /// Right-click on a row: require the macOS user's credentials, then open
-    /// the detail editor. Authentication is cached briefly (see `Authenticator`),
-    /// so editing several items in a row won't re-prompt each time. The
-    /// completion runs on the main queue.
+    /// Right-click on a row opens the detail editor. It lives in its own window
+    /// rather than inside the popover, which the editor's focus would dismiss.
     private func editDetail(_ item: ClipboardItem) {
-        Authenticator.shared.authenticate(
-            reason: "Autentícate para editar el detalle de este elemento"
-        ) { [weak self] granted in
-            guard let self, granted else { return }
-            DetailEditorWindowController.show(item: item, store: self.store)
-        }
+        DetailEditorWindowController.show(item: item, store: store)
     }
 
     private func quickLook(_ item: ClipboardItem) {

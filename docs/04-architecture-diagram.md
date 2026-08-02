@@ -13,7 +13,6 @@ flowchart TD
         ROWS[Filas Texto/Imagen\n+ vista Grupos]
         CHIPS[GroupFilterBadges\nchips + flechas ‹ ›]
         DET[DetailEditorWindow\neditor de nota]
-        AUTH[Authenticator\nLAContext · caché 5 min]
     end
 
     subgraph "Monitorización"
@@ -35,7 +34,6 @@ flowchart TD
         PB[NSPasteboard\ngeneral]
         QL[Quick Look\nqlmanage -p]
         TGT[App activa\nCmd+V]
-        LA[Touch ID /\ncontraseña macOS]
     end
 
     %% Flujo de captura
@@ -55,9 +53,7 @@ flowchart TD
     %% Acciones
     ROWS -->|clic imagen 👁| QL
     ROWS -->|clic item| TGT
-    ROWS -->|clic derecho| AUTH
-    AUTH --> LA
-    AUTH -->|autorizado| DET
+    ROWS -->|clic derecho| DET
     DET -->|guarda detail| CS
 ```
 
@@ -82,7 +78,7 @@ Popover (NSPopover + SwiftUI)
 ├── Vista Imágenes → filas [miniatura] [📝?] [👁] [📁] [⭐] [🗑]
 └── Vista Grupos   → crear / renombrar / borrar + checkbox de filtro
 
-Clic derecho en una fila → autenticación del sistema → ventana de nota de detalle
+Clic derecho en una fila → ventana de nota de detalle
 
 Clic derecho en el icono de barra → NSMenu nativo
 ├── Abrir

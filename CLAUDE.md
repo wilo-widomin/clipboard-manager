@@ -40,7 +40,6 @@ src/ClipboardManager/
 │   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
 │   ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
 │   ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
-│   ├── Authenticator.swift           — LocalAuthentication gate (Touch ID / macOS password), cached
 │   ├── DetailEditorWindowController.swift — detail-note editor window + RightClickCatcher
 │   ├── AboutView.swift / AboutWindowController.swift
 └── Resources/
@@ -94,24 +93,24 @@ live in the status-item right-click menu).
   exhausted, and both vanish when every chip fits (`overflows`, from content width —
   measured with `ContentWidthKey` — vs viewport width).
 
-## Detalle por item (protegido)
+## Detalle por item
 
 - Each item can carry a free-text **detail note** (`ClipboardItem.detail`, optional).
 - **Right-click** on any text/image row opens the detail editor. Detection is a
   `RightClickCatcher` (an `NSViewRepresentable` overlaid on the row whose `hitTest`
   only claims `.rightMouseDown` events, so left-clicks/buttons/hover pass through).
-- Opening the editor is **gated by system authentication**: `Authenticator` uses
-  `LocalAuthentication` (`LAContext`, policy `.deviceOwnerAuthentication` = Touch ID
-  with macOS-password fallback). We store no password ourselves. A successful auth
-  is **cached ~5 min** so editing several items in a row doesn't re-prompt.
-- The editor is `DetailEditorWindowController` — its own small window (not a
-  popover sheet, because the auth dialog steals focus and would dismiss the
-  popover). It hosts `DetailEditorView` (a `TextEditor` + Cancelar/Guardar) and
-  saves via `store.setDetail(id:detail:)` (whitespace-only clears the note).
+- The editor is `DetailEditorWindowController` — its own small window rather than a
+  popover sheet, since taking focus would dismiss the popover. It hosts
+  `DetailEditorView` (a `TextEditor` + Cancelar/Guardar) and saves via
+  `store.setDetail(id:detail:)` (whitespace-only clears the note).
 - Rows show a `note.text` glyph (`DetailIndicator`) when the item has a detail,
   with the note text as tooltip.
-- The auth flow goes through the controller (`PopoverActions.editDetail`), like
+- Opening the editor goes through the controller (`PopoverActions.editDetail`), like
   paste/Quick Look; the save is a plain data mutation straight to the store.
+- There is **no authentication gate**: it was dropped (an earlier version used
+  `LocalAuthentication`) because the note is stored in clear text in `store.json`
+  anyway, so the prompt bought no real protection — only friction. Don't reintroduce
+  it without also encrypting the note.
 
 ## Code Standards
 

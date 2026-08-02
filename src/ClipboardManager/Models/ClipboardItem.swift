@@ -39,7 +39,6 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     public var groupID: UUID? = nil
 
     /// Free-text note the user attaches to the item via the right-click editor.
-    /// Editing is gated behind system authentication (Touch ID / macOS password).
     /// Optional & defaulted so older `store.json` files decode cleanly, and so
     /// the factory methods below need no extra argument.
     public var detail: String? = nil

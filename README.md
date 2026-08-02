@@ -43,9 +43,9 @@ clipboard-manager/
   empieza mostrando todo
 - ✅ La tira de chips se desplaza con flechas ‹ / › cuando no caben todos; las flechas
   desaparecen cuando ya no queda nada que mostrar hacia ese lado
-- ✅ Nota de detalle por item: clic derecho en una fila abre un editor de texto libre,
-  **protegido con la autenticación del sistema** (Touch ID o contraseña de macOS, con
-  la autorización cacheada ~5 min). Las filas con nota muestran un icono 📝
+- ✅ Nota de detalle por item: clic derecho en una fila abre un editor de texto libre.
+  Las filas con nota muestran un icono 📝 con la nota como tooltip. Se guarda en claro
+  en `store.json`, así que no la uses para secretos
 - ✅ UI en un popover SwiftUI con pestañas Texto / Imágenes / Grupos
 - ✅ Popover redimensionable (arrastra el borde derecho, inferior o la esquina); el
   tamaño se recuerda

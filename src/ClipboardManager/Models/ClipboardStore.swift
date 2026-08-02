@@ -231,8 +231,7 @@ public final class ClipboardStore: ObservableObject {
 
     /// Sets (or clears) the free-text detail note on an item. Whitespace-only
     /// input clears the note (stored as `nil`). Order is unaffected, so no
-    /// re-sort — just persist. Editing is gated by the caller behind
-    /// authentication (see `Authenticator`).
+    /// re-sort — just persist.
     public func setDetail(id: ClipboardItem.ID, detail: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)

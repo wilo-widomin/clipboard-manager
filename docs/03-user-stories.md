@@ -26,7 +26,7 @@
 | US-13 | Como usuario, quiero gestionar y filtrar por grupos | La vista Grupos permite crear, renombrar (inline) y borrar grupos. Cada checkbox filtra qué items aparecen en las listas de texto/imágenes. Borrar un grupo conserva sus items (solo pierden el grupo) |
 | US-14 | Como usuario, quiero filtrar por grupo sin salir de la lista | Sobre las listas hay un chip por grupo más "Sin grupo". Sin nada marcado se ve todo; marcando uno o varios, la lista queda reducida a esos (OR). El chip ✕ limpia la selección, que no se conserva entre arranques |
 | US-15 | Como usuario, quiero llegar a todos los chips aunque no quepan | Cuando la tira desborda aparecen flechas ‹ / › que la desplazan; cada flecha se oculta al agotarse ese lado y ambas desaparecen si todos los chips caben |
-| US-16 | Como usuario, quiero anotar un item con información privada | Clic derecho en la fila abre un editor de texto libre. El acceso exige la autenticación del sistema (Touch ID o contraseña de macOS), cacheada ~5 min. Las filas con nota muestran un indicador con la nota como tooltip. Guardar una nota vacía la borra |
+| US-16 | Como usuario, quiero anotar un item con información extra | Clic derecho en la fila abre un editor de texto libre en su propia ventana. Las filas con nota muestran un indicador con la nota como tooltip. Guardar una nota vacía la borra. La nota se guarda en claro, no es para secretos |
 
 ### Could Have
 
