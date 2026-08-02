@@ -17,13 +17,25 @@ open ClipboardManager.xcodeproj
 xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager build
 ```
 
+## Distribuir
+
+```bash
+./scripts/build-release.sh          # usa la versión del proyecto
+./scripts/build-release.sh 1.0.1    # además marca la versión
+```
+
+Genera `dist/ClipboardManager-<versión>.dmg`, firmado con el certificado
+"Apple Development" del llavero. **No está notarizado**, así que en el equipo
+de destino hay que abrirlo la primera vez con clic derecho → Abrir.
+
 ## Estructura del proyecto
 
 ```
 clipboard-manager/
-├── docs/              ← Documentación
+├── docs/              ← Documentación (visión, arquitectura, US, diagrama)
 ├── src/               ← Código fuente (Swift/Xcode)
-├── tests/             ← Tests unitarios
+├── scripts/           ← build-release.sh (.dmg firmado)
+├── tests/             ← Carpeta de tests (vacía: aún no hay suite)
 └── README.md          ← Este archivo
 ```
 
