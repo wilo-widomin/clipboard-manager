@@ -419,6 +419,10 @@ struct GroupFilterBadges: View {
                 .frame(width: geo.size.width, height: geo.size.height,
                        alignment: .leading)
                 .clipped()
+                // `clipped()` only clips the drawing: without this the chips
+                // scrolled out of view stay clickable and swallow the clicks
+                // aimed at the chevron sitting over them.
+                .contentShape(Rectangle())
                 .onAppear { updateViewport(geo.size.width) }
                 .onChange(of: geo.size.width) { updateViewport($0) }
         }
@@ -466,6 +470,8 @@ struct GroupFilterBadges: View {
         .buttonStyle(.plain)
         .opacity(enabled ? 1 : 0)
         .allowsHitTesting(enabled)
+        // Drawn (and hit-tested) above the strip, whatever the HStack order.
+        .zIndex(1)
         .onContinuousHover { phase in
             switch phase {
             case .active: if enabled { NSCursor.pointingHand.set() }
