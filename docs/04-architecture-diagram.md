@@ -11,6 +11,9 @@ flowchart TD
         RM[NSMenu clic-derecho\nAbrir / About / Quit]
         PR[PopoverRootView\nSwiftUI]
         ROWS[Filas Texto/Imagen\n+ vista Grupos]
+        CHIPS[GroupFilterBadges\nchips + flechas ‹ ›]
+        DET[DetailEditorWindow\neditor de nota]
+        AUTH[Authenticator\nLAContext · caché 5 min]
     end
 
     subgraph "Monitorización"
@@ -32,6 +35,7 @@ flowchart TD
         PB[NSPasteboard\ngeneral]
         QL[Quick Look\nqlmanage -p]
         TGT[App activa\nCmd+V]
+        LA[Touch ID /\ncontraseña macOS]
     end
 
     %% Flujo de captura
@@ -43,12 +47,18 @@ flowchart TD
     %% Flujo de UI
     CS -->|publica items/grupos| PR
     PR --> ROWS
+    PR --> CHIPS
+    CHIPS -->|selección de filtro| CS
     SI -->|hospeda| PR
     SI -->|clic derecho| RM
 
     %% Acciones
     ROWS -->|clic imagen 👁| QL
     ROWS -->|clic item| TGT
+    ROWS -->|clic derecho| AUTH
+    AUTH --> LA
+    AUTH -->|autorizado| DET
+    DET -->|guarda detail| CS
 ```
 
 ## Flujo de datos
@@ -66,10 +76,13 @@ flowchart TD
 
 ```
 Popover (NSPopover + SwiftUI)
-├── Picker segmentado: Texto · Imágenes · Grupos
-├── Vista Texto    → filas [preview 40 chars] [📁] [⭐] [🗑]
-├── Vista Imágenes → filas [miniatura] [👁] [📁] [⭐] [🗑]
+├── Picker segmentado: Texto · Imágenes · Grupos   [🗑 vaciar no favoritos]
+├── Chips de filtro (Texto/Imágenes) → ‹ [grupo] [grupo] … [Sin grupo] [✕] ›
+├── Vista Texto    → filas [preview 40 chars] [📝?] [📁] [⭐] [🗑]
+├── Vista Imágenes → filas [miniatura] [📝?] [👁] [📁] [⭐] [🗑]
 └── Vista Grupos   → crear / renombrar / borrar + checkbox de filtro
+
+Clic derecho en una fila → autenticación del sistema → ventana de nota de detalle
 
 Clic derecho en el icono de barra → NSMenu nativo
 ├── Abrir

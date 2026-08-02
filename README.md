@@ -37,12 +37,23 @@ clipboard-manager/
 - ✅ Grupos para favoritos: botón 📁 en cada item para asignarlo/reasignarlo, vista
   "Grupos" para crear/renombrar (inline)/eliminar, y checkbox por grupo para filtrar
   qué ítems se muestran en las listas de Texto/Imágenes
+- ✅ Filtro por grupos como chips sobre las listas: sin nada seleccionado se ve todo,
+  y al marcar uno o varios chips (incluido "Sin grupo") la lista se reduce a esos.
+  El chip ✕ quita todos los filtros de golpe. La selección no se guarda: cada arranque
+  empieza mostrando todo
+- ✅ La tira de chips se desplaza con flechas ‹ / › cuando no caben todos; las flechas
+  desaparecen cuando ya no queda nada que mostrar hacia ese lado
+- ✅ Nota de detalle por item: clic derecho en una fila abre un editor de texto libre,
+  **protegido con la autenticación del sistema** (Touch ID o contraseña de macOS, con
+  la autorización cacheada ~5 min). Las filas con nota muestran un icono 📝
 - ✅ UI en un popover SwiftUI con pestañas Texto / Imágenes / Grupos
 - ✅ Popover redimensionable (arrastra el borde derecho, inferior o la esquina); el
   tamaño se recuerda
 - ✅ Click izquierdo en el icono = abre/cierra; clic derecho = menú Abrir / Acerca de / Salir
 - ✅ Miniaturas para imágenes + 👁 vista rápida (Quick Look)
 - ✅ Click en un item → lo pega en la app donde estabas
+- ✅ Borrar un item es directo (🗑); vaciar de golpe los no favoritos de una vista
+  (🗑 de la cabecera) pide confirmación
 - ✅ Persistencia JSON entre reinicios (store.json + groups.json)
 - ✅ Sin Dock (LSUIElement), solo icono en barra de menús
 

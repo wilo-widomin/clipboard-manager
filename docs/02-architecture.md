@@ -14,6 +14,10 @@
 | Monitorización | Polling de `NSPasteboard.changeCount` | Única forma fiable en macOS; comparar un entero cada 1s tiene coste despreciable |
 | Pegar en la app activa | Copiar + reactivar target + `Cmd+V` sintético | Al mostrar el popover se activa la app, por eso el target se captura *antes* de mostrarlo |
 | Quick Look | `qlmanage -p` vía `Process` | Lanzador externo que no bloquea el popover |
+| Acceso a la nota de detalle | `LocalAuthentication` (`LAContext`, `.deviceOwnerAuthentication`) | Reutiliza Touch ID / la contraseña de macOS: la app no guarda ni valida credenciales propias |
+| Editor de la nota | Ventana propia (`DetailEditorWindowController`) | El diálogo de autenticación roba el foco y cerraría el popover, así que el editor no puede vivir dentro de él |
+| Clic derecho en las filas | `RightClickCatcher` (`NSViewRepresentable`) superpuesto | Su `hitTest` solo reclama `.rightMouseDown`, de modo que clics izquierdos, botones y hover siguen llegando a la fila SwiftUI |
+| Tira de chips de filtro | Desplazamiento propio por flechas, no `ScrollView` | Con pocos chips no se ve ningún control; el paginado por `‹`/`›` es más legible en 30pt de alto que una barra de scroll horizontal |
 
 ## Patrones de diseño
 
@@ -33,13 +37,22 @@ No existe un callback nativo de "clipboard changed". El polling de `changeCount`
 Al capturar, la imagen se convierte a PNG (con TIFF crudo como fallback si la conversión falla) y se guarda como fichero individual en la carpeta de imágenes de la app. El `ClipboardItem` solo referencia el nombre del fichero, manteniendo `store.json` ligero.
 
 ### 4. Límite por tipo
-El máximo de 100 items se aplica **por tipo** (texto e imágenes por separado). Añadir una imagen no puede expulsar textos ni viceversa. Al re-copiar un item existente se deduplica en lugar de crear una copia.
+El límite se aplica **por tipo**: 50 textos y 20 imágenes, nunca un máximo global. Añadir una imagen no puede expulsar textos ni viceversa. Al desbordar se descarta el **no favorito** más antiguo de ese tipo, así que los favoritos pueden superar el límite (y al caer una imagen se borra su PNG). Al re-copiar un item existente se deduplica en lugar de crear una copia.
 
 ### 5. Grupos sobre favoritos
-Un item solo puede pertenecer a un grupo, y asignarle grupo lo auto-favorita (así sobrevive al límite por tipo). Des-favoritar lo saca del grupo. Los checkboxes de la vista Grupos filtran qué items aparecen en las listas de texto/imágenes (incluida la fila fija "Sin grupo").
+Un item solo puede pertenecer a un grupo, y asignarle grupo lo auto-favorita (así sobrevive al límite por tipo). Des-favoritar lo saca del grupo. El filtro afecta a **todos** los items, no solo a los agrupados.
 
-### 6. Sin confirmación al eliminar
-Eliminar un item del historial no tiene consecuencia destructiva. Se elimina directamente.
+### 6. El filtro de grupos funciona como chips OR
+La selección vive en `isFilterEnabled` de cada grupo más `store.showUngrouped`, y la comparten dos UIs: los chips sobre las listas y los checkboxes de la vista Grupos. Con **nada seleccionado el filtro está inactivo y se ve todo** (`isGroupFilterActive` / `passesGroupFilter`); marcando chips, un item pasa si su grupo está marcado o —si no tiene grupo, lo que incluye a todos los no favoritos— si lo está "Sin grupo". La selección **no se persiste**: `load()` limpia el flag de cada grupo, de modo que la app siempre abre mostrando todo.
+
+### 7. Desplazamiento de los chips por flechas
+La tira se maqueta a su ancho intrínseco (`fixedSize`) dentro de un `GeometryReader`, se desplaza con un `offset` y se recorta. Las flechas `‹`/`›` pasan ~80% del ancho visible, se ocultan cuando ese lado se agota y desaparecen ambas si todos los chips caben. Como `clipped()` no recorta el *hit-testing*, hace falta `contentShape(Rectangle())` para que los chips fuera de vista no roben los clics de las flechas.
+
+### 8. Nota de detalle protegida
+Cada item puede llevar una nota libre (`ClipboardItem.detail`, opcional). Abrir el editor exige pasar `Authenticator` (Touch ID con reserva de contraseña de macOS); un éxito se cachea ~5 min para no repreguntar al editar varios items seguidos. La nota se guarda en claro en `store.json`: la barrera es de acceso a la UI, no cifrado.
+
+### 9. Confirmación solo en el borrado masivo
+Eliminar un item suelto es directo (🗑, sin confirmación): la pérdida es mínima. Vaciar los no-favoritos de una vista entera sí pide confirmación, e indica que los favoritos se conservan.
 
 ## Estructura de carpetas
 
@@ -57,17 +70,19 @@ clipboard-manager/
 │       │   ├── AppInfo.swift
 │       │   └── Info.plist
 │       ├── Models/
-│       │   ├── ClipboardItem.swift  ← texto/imagen, favorito, groupID
+│       │   ├── ClipboardItem.swift  ← texto/imagen, favorito, groupID, detail
 │       │   ├── ClipboardGroup.swift ← id, nombre, filtro
-│       │   └── ClipboardStore.swift ← ObservableObject, máx 100, grupos
+│       │   └── ClipboardStore.swift ← ObservableObject, 50/20 por tipo, grupos
 │       ├── Monitor/
 │       │   └── ClipboardMonitor.swift
 │       ├── Persistence/
 │       │   └── JSONPersistenceService.swift  ← store.json + groups.json
 │       ├── MenuUI/
 │       │   ├── StatusItemController.swift    ← NSStatusItem + NSPopover
-│       │   ├── PopoverRootView.swift         ← vistas y filas SwiftUI
+│       │   ├── PopoverRootView.swift         ← vistas, filas y chips de filtro
 │       │   ├── PasteboardHelper.swift        ← copiar + Cmd+V
+│       │   ├── Authenticator.swift           ← LocalAuthentication (caché ~5 min)
+│       │   ├── DetailEditorWindowController.swift ← editor de nota + RightClickCatcher
 │       │   ├── AboutView.swift
 │       │   └── AboutWindowController.swift
 │       └── Resources/
