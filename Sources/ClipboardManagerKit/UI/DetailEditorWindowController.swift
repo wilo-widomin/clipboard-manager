@@ -58,7 +58,9 @@ public final class DetailEditorWindowController: NSObject {
 }
 
 extension DetailEditorWindowController: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
+    /// `public` because the class is public and `NSWindowDelegate` is a public
+    /// protocol: a witness can't be less visible than the conformance.
+    public func windowWillClose(_ notification: Notification) {
         window = nil
         DetailEditorWindowController.open.removeAll { $0 === self }
     }
