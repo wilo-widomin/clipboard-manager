@@ -87,6 +87,12 @@ live in the status-item right-click menu).
   horizontal strip above the Texto/Imágenes lists (one capsule per group + "Sin grupo",
   followed by a `Divider`; a selected chip is filled with the accent colour, an
   unselected one is drawn hollow), and the **checkboxes** in the Grupos tab.
+- The badge strip **scrolls with arrows, not a scrollbar**: the chips are laid out at
+  their intrinsic width (`fixedSize`) inside a `GeometryReader`, shifted by an `offset`
+  state and clipped. `‹` / `›` chevrons on each side page it by ~80% of the visible
+  width; each chevron keeps its slot but goes transparent/inert when that side is
+  exhausted, and both vanish when every chip fits (`overflows`, from content width —
+  measured with `ContentWidthKey` — vs viewport width).
 
 ## Detalle por item (protegido)
 

@@ -369,28 +369,129 @@ struct PopoverRootView: View {
 /// a fixed "Sin grupo" — that toggle exactly the same filters as the checkboxes
 /// in the Grupos tab (`isFilterEnabled` / `store.showUngrouped`). An "off" badge
 /// is drawn hollow, so the enabled/disabled state reads at a glance.
+///
+/// When the chips don't fit, the strip scrolls **horizontally by arrows** instead
+/// of a scrollbar: a `‹` / `›` chevron appears on each side and each click pages
+/// the strip by ~80% of the visible width. A chevron is hidden as soon as there's
+/// nothing left to reveal on that side, and both slots disappear entirely when
+/// every chip fits.
 struct GroupFilterBadges: View {
     @ObservedObject var store: ClipboardStore
 
+    /// How far the chip strip is scrolled, in points (0 = first chip flush left).
+    @State private var offset: CGFloat = 0
+    /// Intrinsic width of all the chips, and width of the window they show through.
+    @State private var contentWidth: CGFloat = 0
+    @State private var viewportWidth: CGFloat = 0
+
+    private var maxOffset: CGFloat { max(0, contentWidth - viewportWidth) }
+    /// 0.5pt slack so rounding never leaves a chevron enabled with nothing to show.
+    private var canScrollLeft: Bool { offset > 0.5 }
+    private var canScrollRight: Bool { offset < maxOffset - 0.5 }
+    /// Reserve the chevron slots only while the strip actually overflows: the
+    /// check is against the *current* viewport, so showing the arrows (which
+    /// narrows the viewport) can never flip the answer back and flicker.
+    private var overflows: Bool { maxOffset > 0.5 }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(store.groups) { group in
-                    badge(group.name, on: group.isFilterEnabled) {
-                        store.toggleGroupFilter(id: group.id)
-                    }
-                }
-                badge("Sin grupo", on: store.showUngrouped) {
-                    store.showUngrouped.toggle()
-                }
-                if store.isGroupFilterActive { clearBadge }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+        HStack(spacing: 2) {
+            if overflows { chevron(.left) }
+            strip
+            if overflows { chevron(.right) }
         }
-        // Without a fixed height the horizontal ScrollView happily eats the
-        // vertical space the list needs.
+        .padding(.horizontal, 6)
+        // Without a fixed height the strip happily eats the vertical space the
+        // list needs.
         .frame(height: 30)
+    }
+
+    /// The chips, laid out at their intrinsic width, shifted by `offset` and
+    /// clipped to the space left over by the chevrons.
+    private var strip: some View {
+        GeometryReader { geo in
+            chips
+                .fixedSize()
+                .background(GeometryReader { inner in
+                    Color.clear.preference(key: ContentWidthKey.self,
+                                           value: inner.size.width)
+                })
+                .offset(x: -offset)
+                .frame(width: geo.size.width, height: geo.size.height,
+                       alignment: .leading)
+                .clipped()
+                .onAppear { updateViewport(geo.size.width) }
+                .onChange(of: geo.size.width) { updateViewport($0) }
+        }
+        .onPreferenceChange(ContentWidthKey.self) { width in
+            contentWidth = width
+            clampOffset()
+        }
+    }
+
+    private var chips: some View {
+        HStack(spacing: 6) {
+            ForEach(store.groups) { group in
+                badge(group.name, on: group.isFilterEnabled) {
+                    store.toggleGroupFilter(id: group.id)
+                }
+            }
+            badge("Sin grupo", on: store.showUngrouped) {
+                store.showUngrouped.toggle()
+            }
+            if store.isGroupFilterActive { clearBadge }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private enum Direction { case left, right }
+
+    /// A page arrow. It keeps its slot (so the chips don't jump) but goes fully
+    /// transparent and inert once that side is exhausted.
+    private func chevron(_ direction: Direction) -> some View {
+        // Explicit types up front: an inline ternary inside `help` makes the
+        // expression ambiguous (String vs LocalizedStringKey).
+        let enabled: Bool = direction == .left ? canScrollLeft : canScrollRight
+        let glyph: String = direction == .left ? "chevron.left" : "chevron.right"
+        let tooltip: String = direction == .left ? "Ver grupos anteriores" : "Ver más grupos"
+
+        return Button {
+            page(direction)
+        } label: {
+            Image(systemName: glyph)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.secondary)
+                .frame(width: 14, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0)
+        .allowsHitTesting(enabled)
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: if enabled { NSCursor.pointingHand.set() }
+            case .ended: NSCursor.arrow.set()
+            }
+        }
+        .help(tooltip)
+    }
+
+    private func page(_ direction: Direction) {
+        let step = max(40, viewportWidth * 0.8)
+        let target = direction == .left ? offset - step : offset + step
+        withAnimation(.easeOut(duration: 0.18)) {
+            offset = min(max(0, target), maxOffset)
+        }
+    }
+
+    private func updateViewport(_ width: CGFloat) {
+        viewportWidth = width
+        clampOffset()
+    }
+
+    /// Keeps the strip from staying scrolled past its end after the chips shrink
+    /// (a group deleted, the ✕ chip disappearing) or the popover being widened.
+    private func clampOffset() {
+        if offset > maxOffset { offset = maxOffset }
     }
 
     /// Last chip: clears the whole selection. Only shown while a filter is
@@ -441,6 +542,14 @@ struct GroupFilterBadges: View {
             }
         }
         .help(tooltip)
+    }
+}
+
+/// Reports the intrinsic width of the chip strip up to `GroupFilterBadges`.
+private struct ContentWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
