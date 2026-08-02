@@ -2,6 +2,10 @@
 
 macOS menubar app for clipboard history — text & images, favorites, groups.
 
+> Contexto por dominios para agentes en `docs/agent-context/` — empieza por su
+> `INDEX.md` y abre solo el dominio de la tarea. Al cambiar código, actualiza el
+> documento que declare esos archivos (`ac-stale.py --changed` los detecta).
+
 ## Architecture
 
 - **AppKit** `NSStatusItem` hosting a **SwiftUI popover** (`NSPopover` + `NSHostingController`).
