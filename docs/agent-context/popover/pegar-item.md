@@ -4,7 +4,7 @@ accion: pegar-item
 actualizado: 2026-08-02
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
-  - src/ClipboardManager/MenuUI/PasteboardHelper.swift
+  - Sources/ClipboardManagerKit/UI/PasteboardHelper.swift
 depende_de: [historial/_dominio]
 ---
 

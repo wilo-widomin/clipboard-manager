@@ -3,8 +3,8 @@ dominio: grupos
 accion: filtrar-por-grupo
 actualizado: 2026-08-02
 archivos:
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
-  - src/ClipboardManager/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
 ---
 
 # Filtrar por grupo

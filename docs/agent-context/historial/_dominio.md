@@ -2,10 +2,10 @@
 dominio: historial
 actualizado: 2026-08-02
 archivos:
-  - src/ClipboardManager/Models/ClipboardItem.swift
-  - src/ClipboardManager/Models/ClipboardStore.swift
-  - src/ClipboardManager/Monitor/ClipboardMonitor.swift
-  - src/ClipboardManager/Persistence/JSONPersistenceService.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/Monitor/ClipboardMonitor.swift
+  - Sources/ClipboardManagerKit/Persistence/JSONPersistenceService.swift
 depende_de: [grupos/_dominio]
 ---
 

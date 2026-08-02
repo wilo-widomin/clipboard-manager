@@ -11,7 +11,7 @@ import CoreGraphics
 /// Copies content to the general pasteboard, then simulates Cmd+V to paste
 /// it into the currently focused input.
 @MainActor
-enum PasteboardHelper {
+public enum PasteboardHelper {
 
     /// Delay before posting Cmd+V. The menu must fully close and key focus must
     /// return to the previously active app first, otherwise the paste lands in
@@ -21,7 +21,7 @@ enum PasteboardHelper {
 
     /// Copies text to the pasteboard and pastes it into `target` (the app that
     /// had focus before the menu opened).
-    static func copyAndPaste(text: String, reactivating target: NSRunningApplication?) {
+    public static func copyAndPaste(text: String, reactivating target: NSRunningApplication?) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
@@ -29,7 +29,7 @@ enum PasteboardHelper {
     }
 
     /// Copies an image to the pasteboard and pastes it into `target`.
-    static func copyAndPaste(image: NSImage, reactivating target: NSRunningApplication?) {
+    public static func copyAndPaste(image: NSImage, reactivating target: NSRunningApplication?) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.writeObjects([image])

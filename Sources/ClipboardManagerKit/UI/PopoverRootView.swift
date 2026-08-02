@@ -29,7 +29,7 @@ enum Cursors {
 
 /// Persisted, clamped popover size. Shared by the SwiftUI content (which drives
 /// the live size while dragging the resize grip) and the controller (initial size).
-enum PopoverSize {
+public enum PopoverSize {
     static let minWidth: CGFloat = 300
     static let minHeight: CGFloat = 260
     static let maxWidth: CGFloat = 760
@@ -43,9 +43,9 @@ enum PopoverSize {
     /// right before showing the popover, because that's the display the popover
     /// opens on — `NSScreen.main` follows the key window and, in an LSUIElement
     /// app that isn't active yet, can easily point at a different one.
-    static var activeScreen: NSScreen?
+    public static var activeScreen: NSScreen?
 
-    static func saved() -> CGSize {
+    public static func saved() -> CGSize {
         let d = UserDefaults.standard
         guard d.object(forKey: "popoverWidth") != nil else { return clamp(defaultSize) }
         let w = clampWidth(CGFloat(d.double(forKey: "popoverWidth")))
@@ -82,10 +82,25 @@ enum PopoverSize {
     }
 }
 
-struct PopoverRootView: View {
+public struct PopoverRootView: View {
 
     @ObservedObject var store: ClipboardStore
     let actions: PopoverActions
+
+    /// Whether this view owns the window it lives in.
+    ///
+    /// The standalone app hosts it in an `NSPopover` of its own, so the view
+    /// dictates its size and draws the resize handles. Embedded in another app
+    /// (Widomin), the host owns the popover and its chrome, so the view just
+    /// fills whatever space it is given — drawing grips there would let the user
+    /// drag against a size the host controls.
+    let ownsWindow: Bool
+
+    public init(store: ClipboardStore, actions: PopoverActions, ownsWindow: Bool = true) {
+        self.store = store
+        self.actions = actions
+        self.ownsWindow = ownsWindow
+    }
 
     // New-group prompt state. `assignTo` carries the item to auto-assign the
     // freshly created group to (nil for a standalone create from the Grupos tab).
@@ -106,31 +121,8 @@ struct PopoverRootView: View {
     private static let edge: CGFloat = 8
     private static let corner: CGFloat = 16
 
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            if store.viewMode != .groups {
-                GroupFilterBadges(store: store)
-                Divider()
-            }
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding(.trailing, Self.edge)
-        .padding(.bottom, Self.edge)
-        .overlay(alignment: .trailing) { rightResizeHandle }
-        .overlay(alignment: .bottom) { bottomResizeHandle }
-        .overlay(alignment: .bottomTrailing) { cornerResizeHandle }
-        .frame(width: size.width, height: size.height)
-        // Re-clamp to the screen every time the popover is shown and whenever the
-        // display setup changes: `saved()` re-reads the user's persisted size and
-        // caps it to what fits now, so shrinking the screen doesn't lose the size.
-        .onAppear { size = PopoverSize.saved() }
-        .onReceive(NotificationCenter.default.publisher(
-            for: NSApplication.didChangeScreenParametersNotification)) { _ in
-            size = PopoverSize.saved()
-        }
+    public var body: some View {
+        sizedContent
         .alert("Nuevo grupo", isPresented: $showNewGroupAlert) {
             TextField("Nombre", text: $newGroupName)
             Button("Cancelar", role: .cancel) { newGroupName = "" }
@@ -146,6 +138,46 @@ struct PopoverRootView: View {
             Text(confirmClearType == .image
                  ? "Se borrarán todas las imágenes que no sean favoritas. Las favoritas se conservan."
                  : "Se borrarán todos los textos que no sean favoritos. Los favoritos se conservan.")
+        }
+    }
+
+    /// The list itself, identical in every host.
+    private var stack: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            if store.viewMode != .groups {
+                GroupFilterBadges(store: store)
+                Divider()
+            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// The list plus whatever sizing the host implies: our own popover chrome
+    /// when we own the window, otherwise just filling the space we were given.
+    @ViewBuilder
+    private var sizedContent: some View {
+        if ownsWindow {
+            stack
+                .padding(.trailing, Self.edge)
+                .padding(.bottom, Self.edge)
+                .overlay(alignment: .trailing) { rightResizeHandle }
+                .overlay(alignment: .bottom) { bottomResizeHandle }
+                .overlay(alignment: .bottomTrailing) { cornerResizeHandle }
+                .frame(width: size.width, height: size.height)
+                // Re-clamp to the screen every time the popover is shown and whenever the
+                // display setup changes: `saved()` re-reads the user's persisted size and
+                // caps it to what fits now, so shrinking the screen doesn't lose the size.
+                .onAppear { size = PopoverSize.saved() }
+                .onReceive(NotificationCenter.default.publisher(
+                    for: NSApplication.didChangeScreenParametersNotification)) { _ in
+                    size = PopoverSize.saved()
+                }
+        } else {
+            stack
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

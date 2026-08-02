@@ -2,9 +2,9 @@
 dominio: grupos
 actualizado: 2026-08-02
 archivos:
-  - src/ClipboardManager/Models/ClipboardGroup.swift
-  - src/ClipboardManager/Models/ClipboardStore.swift
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardGroup.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
 depende_de: [historial/_dominio]
 ---
 

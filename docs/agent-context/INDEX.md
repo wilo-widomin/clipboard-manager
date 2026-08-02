@@ -18,11 +18,17 @@ Transversal:
 
 ## Mapa rápido
 
+El código compartido vive en el paquete **ClipboardManagerKit**; la app suelta es la
+cáscara. Hay **una sola copia de cada archivo**: el target de la app compila
+`Sources/ClipboardManagerKit/` directamente y Widomin consume ese mismo directorio
+como dependencia SPM. Si un segundo anfitrión lo necesitaría, va al paquete.
+
+- `Sources/ClipboardManagerKit/Models/` — `ClipboardItem`, `ClipboardGroup`, `ClipboardStore`
+- `Sources/ClipboardManagerKit/Monitor/` — polling del portapapeles
+- `Sources/ClipboardManagerKit/Persistence/` — JSON (`store.json` + `groups.json`)
+- `Sources/ClipboardManagerKit/UI/` — popover, filas, chips, editor, `PopoverActions`
 - `src/ClipboardManager/App/` — entry point (`AppDelegate`), Info.plist, versión
-- `src/ClipboardManager/Models/` — `ClipboardItem`, `ClipboardGroup`, `ClipboardStore`
-- `src/ClipboardManager/Monitor/` — polling del portapapeles
-- `src/ClipboardManager/Persistence/` — JSON (`store.json` + `groups.json`)
-- `src/ClipboardManager/MenuUI/` — status item, popover, filas, chips, editor, About
+- `src/ClipboardManager/MenuUI/` — status item (foco/pegado) y About: **solo** app suelta
 - `docs/01..04-*.md` — documentación de producto (visión, ADD, user stories, diagrama)
 - `scripts/build-release.sh` — `.dmg` firmado sin notarizar
 

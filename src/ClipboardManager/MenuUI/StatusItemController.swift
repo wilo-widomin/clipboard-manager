@@ -16,14 +16,8 @@
 import AppKit
 import SwiftUI
 
-/// Callbacks the SwiftUI popover needs that live at the app/controller level.
-/// All plain data mutations go straight to `ClipboardStore`; only these need
-/// the controller (focus/paste, app windows).
-struct PopoverActions {
-    let selectItem: (ClipboardItem) -> Void
-    let quickLook: (ClipboardItem) -> Void
-    let editDetail: (ClipboardItem) -> Void
-}
+// `PopoverActions` now lives in ClipboardManagerKit: both this app and Widomin
+// host the same popover and each injects its own implementation.
 
 /// Manages the menu-bar status item and its popover.
 @MainActor

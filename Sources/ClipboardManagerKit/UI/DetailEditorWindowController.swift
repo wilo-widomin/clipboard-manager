@@ -15,7 +15,7 @@ import SwiftUI
 /// window; the controllers are retained here and released when their window
 /// closes.
 @MainActor
-final class DetailEditorWindowController: NSObject {
+public final class DetailEditorWindowController: NSObject {
 
     /// Retains live controllers so their windows aren't deallocated.
     private static var open: [DetailEditorWindowController] = []
@@ -23,7 +23,7 @@ final class DetailEditorWindowController: NSObject {
     private var window: NSWindow?
 
     /// Opens the editor for `item`, writing changes back through `store`.
-    static func show(item: ClipboardItem, store: ClipboardStore) {
+    public static func show(item: ClipboardItem, store: ClipboardStore) {
         let controller = DetailEditorWindowController()
         open.append(controller)
         controller.present(item: item, store: store)

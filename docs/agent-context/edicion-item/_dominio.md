@@ -2,8 +2,8 @@
 dominio: edicion-item
 actualizado: 2026-08-02
 archivos:
-  - src/ClipboardManager/MenuUI/DetailEditorWindowController.swift
-  - src/ClipboardManager/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/UI/DetailEditorWindowController.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
 depende_de: [historial/_dominio, popover/_dominio]
 ---
 

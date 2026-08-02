@@ -3,7 +3,7 @@ dominio: popover
 actualizado: 2026-08-02
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
   - src/ClipboardManager/MenuUI/AboutView.swift
   - src/ClipboardManager/MenuUI/AboutWindowController.swift
 depende_de: [historial/_dominio]

@@ -26,12 +26,15 @@ macOS menubar app for clipboard history — text & images, favorites, groups.
 
 ## Project structure
 
+Everything reusable lives in the **ClipboardManagerKit** Swift Package; the app is a
+thin shell around it. There is exactly **one copy of each file** — the standalone app
+target compiles `Sources/ClipboardManagerKit/` directly (a second
+`fileSystemSynchronizedGroup`), and Widomin consumes the same directory as an SPM
+dependency. Never copy a file into `src/` to "adapt" it.
+
 ```
-src/ClipboardManager/
-├── App/
-│   ├── AppDelegate.swift     — @main entry, LSUIElement, tick timer
-│   ├── AppInfo.swift         — name, version, author credit (widomin.com)
-│   └── Info.plist
+Package.swift                  — product ClipboardManagerKit, macOS 13+
+Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 ├── Models/
 │   ├── ClipboardItem.swift    — item model (text/image, favorite, date, groupID)
 │   ├── ClipboardGroup.swift   — group model (id, name, isFilterEnabled)
@@ -40,15 +43,32 @@ src/ClipboardManager/
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
 │   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
+└── UI/
+    ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
+    ├── PopoverActions.swift          — the seam: what each host injects
+    ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
+    └── DetailEditorWindowController.swift — item editor window + RightClickCatcher
+
+src/ClipboardManager/          — STANDALONE APP ONLY
+├── App/
+│   ├── AppDelegate.swift     — @main entry, LSUIElement, tick timer
+│   ├── AppInfo.swift         — name, version, author credit (widomin.com)
+│   └── Info.plist
 ├── MenuUI/
 │   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
-│   ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
-│   ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
-│   ├── DetailEditorWindowController.swift — item editor window (texto + detalle) + RightClickCatcher
-│   ├── AboutView.swift / AboutWindowController.swift
+│   └── AboutView.swift / AboutWindowController.swift
 └── Resources/
-    └── (icons will go here)
+    └── Assets.xcassets
 ```
+
+**What goes where:** if a second host would need it, it belongs in the Kit. What stays
+in the app is only what makes sense when *this* app owns the menu bar — the status
+item, stealing and restoring focus to paste, its own About window and version string.
+
+`PopoverRootView(store:actions:ownsWindow:)` is the entry point. `ownsWindow` defaults
+to `true`: the standalone app hosts the view in its own `NSPopover`, so the view sets
+its size and draws the resize handles. A host that already owns the window (Widomin)
+passes `false` and the view just fills the space it is given.
 
 `PopoverRootView` holds the SwiftUI views: a segmented Texto/Imágenes/Grupos picker,
 `ClipboardTextRow` / `ClipboardImageRow` (each with a 📁 `Menu` for group assignment,
