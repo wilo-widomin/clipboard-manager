@@ -28,9 +28,9 @@ final class StatusItemController: NSObject {
     private let popover = NSPopover()
     private var eventMonitor: Any?
 
-    /// Rolling history of the last few non-self app activations, newest last,
-    /// used as a fallback when resolving the paste target.
-    private var focusHistory: [NSRunningApplication] = []
+    /// Resolves (and remembers) which app a picked item should be pasted into.
+    /// Lives in the Kit: every host of the popover has the same problem.
+    private let pasteTargetTracker = PasteTargetTracker()
 
     /// The app to paste into, captured when the popover opens (before we steal
     /// focus by activating ourselves).
@@ -43,7 +43,6 @@ final class StatusItemController: NSObject {
 
         configureButton()
         setupPopover()
-        observeAppActivation()
     }
 
     // MARK: - Status button
@@ -106,7 +105,7 @@ final class StatusItemController: NSObject {
 
     private func showPopover(_ sender: NSStatusBarButton) {
         // Capture the paste target BEFORE activating ourselves.
-        pasteTarget = resolvePasteTarget()
+        pasteTarget = pasteTargetTracker.resolve()
         // Record which display the icon was clicked on: it bounds how tall the
         // popover may be, and the content re-clamps to it as it appears.
         PopoverSize.activeScreen = sender.window?.screen
@@ -198,32 +197,4 @@ final class StatusItemController: NSObject {
         }
     }
 
-    // MARK: - Focus tracking
-
-    /// Continuously records the last non-self app to become active.
-    private func observeAppActivation() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            guard let self = self else { return }
-            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            guard app.processIdentifier != NSRunningApplication.current.processIdentifier else { return }
-            self.focusHistory.append(app)
-            if self.focusHistory.count > 8 {
-                self.focusHistory.removeFirst(self.focusHistory.count - 8)
-            }
-        }
-    }
-
-    /// The app to paste into: the frontmost app right now (before we activate),
-    /// falling back to the most recent app we saw activate.
-    private func resolvePasteTarget() -> NSRunningApplication? {
-        let selfPID = NSRunningApplication.current.processIdentifier
-        if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != selfPID {
-            return front
-        }
-        return focusHistory.last(where: { !$0.isTerminated && $0.processIdentifier != selfPID })
-    }
 }

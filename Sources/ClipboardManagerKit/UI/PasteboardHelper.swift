@@ -13,11 +13,19 @@ import CoreGraphics
 @MainActor
 public enum PasteboardHelper {
 
-    /// Delay before posting Cmd+V. The menu must fully close and key focus must
-    /// return to the previously active app first, otherwise the paste lands in
-    /// the void. 0.15s was still too short once the menu closes — reactivating
-    /// the target app needs a beat to take effect.
-    private static let pasteDelay: TimeInterval = 0.25
+    /// Grace period after the target is confirmed frontmost, before posting ⌘V:
+    /// being frontmost and having a key window ready to take keystrokes are not
+    /// the same instant.
+    private static let settleDelay: TimeInterval = 0.15
+
+    /// How often to check whether the target has come to the front.
+    private static let pollInterval: TimeInterval = 0.05
+
+    /// How long to wait for that before giving up and pasting anyway. Generous,
+    /// because activating an app that lives on another Space plays the
+    /// desktop-switch animation, which runs far longer than any fixed delay
+    /// worth paying in the common case.
+    private static let maxWait: TimeInterval = 2.0
 
     /// Copies text to the pasteboard and pastes it into `target` (the app that
     /// had focus before the menu opened).
@@ -36,12 +44,47 @@ public enum PasteboardHelper {
         pasteAfterReactivating(target)
     }
 
-    /// Reactivates the previously-focused app, waits for focus to settle, then
-    /// posts Cmd+V. Without the explicit reactivation, closing the menu leaves
-    /// key focus on our own (menu-bar) app and the paste goes nowhere.
+    /// Reactivates the previously-focused app, waits until it really is in
+    /// front, then posts ⌘V. Without the explicit reactivation, closing the
+    /// popover leaves key focus on our own (menu-bar) app and the paste goes
+    /// nowhere.
+    ///
+    /// The wait is a poll rather than a fixed delay because how long it takes
+    /// varies by two orders of magnitude: reactivating an app on the current
+    /// desktop is nearly instant, while one on another Space has to play the
+    /// switch animation first. A delay long enough for the second case would
+    /// make the first feel broken, and the delay this code used to have (0.25s)
+    /// was short enough that pasting across Spaces missed entirely.
     private static func pasteAfterReactivating(_ target: NSRunningApplication?) {
-        target?.activate(options: [])
-        DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
+        guard let target else {
+            // No target resolved: the content is on the pasteboard either way,
+            // so paste into whatever has focus and let the user sort it out.
+            pasteAfterSettling()
+            return
+        }
+        target.activate(options: [.activateAllWindows])
+        waitUntilFrontmost(target, giveUpAt: Date().addingTimeInterval(maxWait))
+    }
+
+    /// Polls until `target` is the frontmost app, then pastes. Pastes anyway
+    /// once the deadline passes: a paste into the wrong place is no worse than
+    /// the silent no-op we would otherwise leave behind.
+    private static func waitUntilFrontmost(_ target: NSRunningApplication, giveUpAt deadline: Date) {
+        let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            == target.processIdentifier
+
+        guard !isFrontmost, Date() < deadline else {
+            pasteAfterSettling()
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + pollInterval) {
+            waitUntilFrontmost(target, giveUpAt: deadline)
+        }
+    }
+
+    private static func pasteAfterSettling() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + settleDelay) {
             postCmdV()
         }
     }
