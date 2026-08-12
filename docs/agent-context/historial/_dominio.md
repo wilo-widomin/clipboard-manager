@@ -59,5 +59,7 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
   que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el monitor
   re-lee) le borraba el grupo.
 - Editar texto o detalle **no** cambia `createdAt` ni el orden, a propósito.
-- `textPreview` recorta a 40 caracteres y hace trim: es solo para la fila, nunca para
-  pegar ni comparar.
+- La fila de texto usa `textLine`: texto completo en una línea (espacios colapsados),
+  y quien recorta es la vista con `lineLimit(1)` según el ancho real. `textPreview`
+  (40 caracteres + "...") sigue existiendo para otros anfitriones. Ninguno de los dos
+  sirve para pegar ni comparar.

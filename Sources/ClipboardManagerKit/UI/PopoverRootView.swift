@@ -704,11 +704,13 @@ struct ClipboardTextRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(item.textPreview)
+            Text(item.textLine)
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer(minLength: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // Margen hasta el primer icono; el texto ocupa todo lo demás.
+                .padding(.trailing, 4)
             DetailIndicator(item: item)
             groupMenu
             favoriteButton

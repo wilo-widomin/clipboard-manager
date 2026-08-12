@@ -52,6 +52,17 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
 
     // MARK: - Preview helpers
 
+    /// Texto completo en una sola línea (saltos y tabuladores colapsados a
+    /// espacios). Pensado para filas que ya recortan con `lineLimit(1)`: la
+    /// vista decide dónde cortar según el ancho real, no un límite fijo.
+    public var textLine: String {
+        guard let text = textContent else { return "" }
+        return text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
     /// First 40 characters of the text, followed by "..." if truncated.
     public var textPreview: String {
         guard let text = textContent else { return "" }
