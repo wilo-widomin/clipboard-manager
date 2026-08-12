@@ -70,6 +70,13 @@ to `true`: the standalone app hosts the view in its own `NSPopover`, so the view
 its size and draws the resize handles. A host that already owns the window (Widomin)
 passes `false` and the view just fills the space it is given.
 
+The Texto/Imágenes lists are **split in two independently scrolling panes** (`splitList`):
+favourites on top, non-favourite history below, separated by the same heavy
+`favoriteDivider`. The favourites pane is sized to at most `maxFavoriteRows` (15) rows
+and never more than half the available height (an image row is ~78pt, so 15 would leave
+the history no room); with no history below it takes the whole area. One shared scroll
+is not an option — favourites are unlimited and would push the history off the bottom.
+
 `PopoverRootView` holds the SwiftUI views: a segmented Texto/Imágenes/Grupos picker,
 `ClipboardTextRow` / `ClipboardImageRow` (each with a 📁 `Menu` for group assignment,
 ⭐ favourite, 🗑 delete, and 👁 Quick Look on images), and `GroupsManageView` /
@@ -84,7 +91,7 @@ live in the status-item right-click menu).
 
 - **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
-- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally; `cap` evicts the oldest **non-favourite** of that type, so favourites can push a type past its limit (and dropping an image deletes its PNG). `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
 
 ## Groups
 

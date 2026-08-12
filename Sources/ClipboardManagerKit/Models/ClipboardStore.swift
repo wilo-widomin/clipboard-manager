@@ -3,10 +3,10 @@
 //  ClipboardManager
 //
 //  ObservableObject single source of truth for all clipboard items.
-//  Capped per content type (50 text, 20 images), never globally; only
-//  non-favourites are evicted, so favourites can push a type past its
-//  limit. Favourites always sort first, then the rest — both groups
-//  ordered by creation date descending.
+//  Capped per content type (50 text, 20 images), never globally, and the
+//  cap counts **only non-favourites**: favourites are unlimited and don't
+//  consume the history budget. Favourites always sort first, then the
+//  rest — both groups ordered by creation date descending.
 //
 
 import Foundation
@@ -23,7 +23,7 @@ public enum ClipboardViewMode: String, Codable, Sendable, Hashable {
 @MainActor
 public final class ClipboardStore: ObservableObject {
 
-    // Separate limits per content type.
+    // Separate limits per content type, applied only to non-favourites.
     private let maxTextItems = 50
     private let maxImageItems = 20
 
@@ -167,7 +167,7 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Maximum items allowed for a given content type.
+    /// Maximum **non-favourite** items allowed for a given content type.
     private func maxCount(for contentType: ClipboardContentType) -> Int {
         switch contentType {
         case .text:  return maxTextItems
@@ -175,16 +175,19 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Drops oldest non-favourite items of `type` until that type is within its
-    /// limit. Deletes the image file of any dropped image item.
+    /// Drops oldest non-favourite items of `type` until the **non-favourites**
+    /// of that type are within the limit. Favourites are not counted and never
+    /// dropped: they can be hundreds without eating the history budget (the old
+    /// behaviour counted them, so a list full of favourites left no room at all
+    /// for freshly copied items). Deletes the image file of any dropped item.
     private func cap(_ list: [ClipboardItem], type: ClipboardContentType) -> [ClipboardItem] {
         var result = list
         let limit = maxCount(for: type)
-        while result.filter({ $0.contentType == type }).count > limit {
+        while result.filter({ $0.contentType == type && !$0.isFavorite }).count > limit {
             guard let drop = result
                 .filter({ $0.contentType == type && !$0.isFavorite })
                 .min(by: { $0.createdAt < $1.createdAt })
-            else { break }  // only favourites left — keep them
+            else { break }
             result.removeAll { $0.id == drop.id }
             if let filename = drop.imageFilename {
                 ImageStorage.delete(filename: filename)

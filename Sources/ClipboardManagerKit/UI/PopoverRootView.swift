@@ -297,59 +297,112 @@ public struct PopoverRootView: View {
 
     private var textList: some View {
         let items = store.items.filter { $0.contentType == .text && store.passesGroupFilter($0) }
-        return ScrollView {
-            LazyVStack(spacing: 2) {
-                if items.isEmpty {
-                    emptyLabel(store.items.contains { $0.contentType == .text } ? "Sin textos visibles (filtrados)" : "Sin textos")
-                }
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    if needsFavoriteDivider(items, index) { favoriteDivider }
-                    ClipboardTextRow(
-                        item: item,
-                        groups: store.groups,
-                        onSelect: { actions.selectItem(item) },
-                        onEditDetail: { actions.editDetail(item) },
-                        onToggleFavorite: { store.toggleFavorite(id: item.id) },
-                        onDelete: { store.remove(id: item.id) },
-                        onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
-                        onNewGroup: { startNewGroup(assignTo: item.id) }
-                    )
-                }
-            }
-            .padding(6)
+        return splitList(
+            items: items,
+            rowHeight: Self.textRowHeight,
+            emptyText: store.items.contains { $0.contentType == .text } ? "Sin textos visibles (filtrados)" : "Sin textos"
+        ) { item in
+            ClipboardTextRow(
+                item: item,
+                groups: store.groups,
+                onSelect: { actions.selectItem(item) },
+                onEditDetail: { actions.editDetail(item) },
+                onToggleFavorite: { store.toggleFavorite(id: item.id) },
+                onDelete: { store.remove(id: item.id) },
+                onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
+                onNewGroup: { startNewGroup(assignTo: item.id) }
+            )
         }
     }
 
     private var imageList: some View {
         let items = store.items.filter { $0.contentType == .image && store.passesGroupFilter($0) }
-        return ScrollView {
-            LazyVStack(spacing: 2) {
-                if items.isEmpty {
-                    emptyLabel(store.items.contains { $0.contentType == .image } ? "Sin imágenes visibles (filtradas)" : "Sin imágenes")
-                }
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    if needsFavoriteDivider(items, index) { favoriteDivider }
-                    ClipboardImageRow(
-                        item: item,
-                        groups: store.groups,
-                        onSelect: { actions.selectItem(item) },
-                        onEditDetail: { actions.editDetail(item) },
-                        onQuickLook: { actions.quickLook(item) },
-                        onToggleFavorite: { store.toggleFavorite(id: item.id) },
-                        onDelete: { store.remove(id: item.id) },
-                        onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
-                        onNewGroup: { startNewGroup(assignTo: item.id) }
-                    )
-                }
-            }
-            .padding(6)
+        return splitList(
+            items: items,
+            rowHeight: Self.imageRowHeight,
+            emptyText: store.items.contains { $0.contentType == .image } ? "Sin imágenes visibles (filtradas)" : "Sin imágenes"
+        ) { item in
+            ClipboardImageRow(
+                item: item,
+                groups: store.groups,
+                onSelect: { actions.selectItem(item) },
+                onEditDetail: { actions.editDetail(item) },
+                onQuickLook: { actions.quickLook(item) },
+                onToggleFavorite: { store.toggleFavorite(id: item.id) },
+                onDelete: { store.remove(id: item.id) },
+                onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
+                onNewGroup: { startNewGroup(assignTo: item.id) }
+            )
         }
     }
 
-    /// The lists are sorted favourites-first, so the boundary between the two
-    /// blocks is the first non-favourite that follows a favourite.
-    private func needsFavoriteDivider(_ items: [ClipboardItem], _ index: Int) -> Bool {
-        index > 0 && !items[index].isFavorite && items[index - 1].isFavorite
+    // MARK: - Split list (favourites on top, history below)
+
+    /// Favourites are unlimited, so they can't share one scroll with the recent
+    /// items: a few hundred stars would push the history off the bottom. The
+    /// list is split into two independently scrolling panes separated by the
+    /// same heavy rule as before.
+    private static let maxFavoriteRows = 15
+    /// Approximate laid-out row heights (content + vertical padding + the 2pt
+    /// stack spacing). Only used to size the favourites pane, so being a couple
+    /// of points off just means it shows slightly more or less than 15 rows.
+    private static let textRowHeight: CGFloat = 29
+    private static let imageRowHeight: CGFloat = 78
+
+    /// Height of the favourites pane: up to `maxFavoriteRows` rows, but never
+    /// more than half the available height — an image row is ~78pt, so 15 of
+    /// them would be taller than the whole popover and leave the history with
+    /// no room at all.
+    private static func favoritesPaneHeight(count: Int, rowHeight: CGFloat, available: CGFloat) -> CGFloat {
+        let rows = CGFloat(min(count, maxFavoriteRows))
+        return min(rows * rowHeight + 12, max(available * 0.5, rowHeight + 12))
+    }
+
+    @ViewBuilder
+    private func splitList<Row: View>(
+        items: [ClipboardItem],
+        rowHeight: CGFloat,
+        emptyText: String,
+        @ViewBuilder row: @escaping (ClipboardItem) -> Row
+    ) -> some View {
+        let favorites = items.filter { $0.isFavorite }
+        let history = items.filter { !$0.isFavorite }
+        if items.isEmpty {
+            ScrollView {
+                LazyVStack(spacing: 2) { emptyLabel(emptyText) }.padding(6)
+            }
+        } else {
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    if !favorites.isEmpty {
+                        pane(favorites, row: row)
+                            // With no history below, the favourites take it all.
+                            .frame(height: history.isEmpty
+                                   ? geo.size.height
+                                   : Self.favoritesPaneHeight(count: favorites.count,
+                                                              rowHeight: rowHeight,
+                                                              available: geo.size.height))
+                        if !history.isEmpty { favoriteDivider }
+                    }
+                    if !history.isEmpty {
+                        pane(history, row: row)
+                            .frame(maxHeight: .infinity)
+                    }
+                }
+            }
+        }
+    }
+
+    private func pane<Row: View>(
+        _ items: [ClipboardItem],
+        @ViewBuilder row: @escaping (ClipboardItem) -> Row
+    ) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                ForEach(items) { item in row(item) }
+            }
+            .padding(6)
+        }
     }
 
     /// Deliberately heavier than a stock `Divider` (which is 1pt and very faint):

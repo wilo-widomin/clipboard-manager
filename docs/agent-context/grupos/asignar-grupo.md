@@ -1,7 +1,7 @@
 ---
 dominio: grupos
 accion: asignar-grupo
-actualizado: 2026-08-02
+actualizado: 2026-08-12
 archivos:
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -15,7 +15,7 @@ Dos entradas a lo mismo: el botón 📁 de cada fila (asignar) y la pestaña **G
 
 ## Flujo
 
-1. 📁 en una fila → `GroupAssignmentMenu` (`PopoverRootView.swift:565`) lista los
+1. 📁 en una fila → `GroupAssignmentMenu` (`PopoverRootView.swift:650`) lista los
    grupos, "Sin grupo" y "Nuevo grupo…".
 2. Elegir grupo → `store.assignGroup(itemID:groupID:)`; "Sin grupo" pasa `nil`.
 3. "Nuevo grupo…" → `startNewGroup(assignTo:)` guarda el item en `newGroupAssignTo` y

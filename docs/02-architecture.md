@@ -36,7 +36,7 @@ No existe un callback nativo de "clipboard changed". El polling de `changeCount`
 Al capturar, la imagen se convierte a PNG (con TIFF crudo como fallback si la conversión falla) y se guarda como fichero individual en la carpeta de imágenes de la app. El `ClipboardItem` solo referencia el nombre del fichero, manteniendo `store.json` ligero.
 
 ### 4. Límite por tipo
-El límite se aplica **por tipo**: 50 textos y 20 imágenes, nunca un máximo global. Añadir una imagen no puede expulsar textos ni viceversa. Al desbordar se descarta el **no favorito** más antiguo de ese tipo, así que los favoritos pueden superar el límite (y al caer una imagen se borra su PNG). Al re-copiar un item existente se deduplica en lugar de crear una copia.
+El límite se aplica **por tipo**: 50 textos y 20 imágenes, nunca un máximo global. Añadir una imagen no puede expulsar textos ni viceversa. Y cuenta **solo los no favoritos**: los favoritos son ilimitados y no consumen cupo. Al desbordar se descarta el no favorito más antiguo de ese tipo (y al caer una imagen se borra su PNG). Al re-copiar un item existente se deduplica en lugar de crear una copia.
 
 ### 5. Grupos sobre favoritos
 Un item solo puede pertenecer a un grupo, y asignarle grupo lo auto-favorita (así sobrevive al límite por tipo). Des-favoritar lo saca del grupo. El filtro afecta a **todos** los items, no solo a los agrupados.
@@ -71,7 +71,7 @@ clipboard-manager/
 │       ├── Models/
 │       │   ├── ClipboardItem.swift  ← texto/imagen, favorito, groupID, detail
 │       │   ├── ClipboardGroup.swift ← id, nombre, filtro
-│       │   └── ClipboardStore.swift ← ObservableObject, 50/20 por tipo, grupos
+│       │   └── ClipboardStore.swift ← ObservableObject, 50/20 no favoritos por tipo, grupos
 │       ├── Monitor/
 │       │   └── ClipboardMonitor.swift
 │       ├── Persistence/

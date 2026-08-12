@@ -4,8 +4,9 @@
 
 Proporcionar un gestor de portapapeles ligero y siempre accesible desde la barra de menús de macOS que permita:
 
-- Recuperar los últimos elementos copiados (50 textos y 20 imágenes, límite por tipo)
-- Mantener elementos favoritos siempre visibles al inicio de la lista
+- Recuperar los últimos elementos copiados (50 textos y 20 imágenes, límite por tipo,
+  contando solo los no favoritos)
+- Mantener elementos favoritos —ilimitados— siempre visibles al inicio de la lista
 - Organizar los favoritos en grupos y filtrar la lista por grupo
 - Navegar entre vista de texto, imágenes y grupos mediante un selector segmentado
 - Visualizar imágenes en miniatura y abrirlas en Vista Previa (Quick Look) de macOS
@@ -17,10 +18,10 @@ Proporcionar un gestor de portapapeles ligero y siempre accesible desde la barra
 | Funcionalidad | Descripción |
 |---|---|
 | Monitorización de clipboard | Detectar nuevos elementos copiados mediante polling del `changeCount` de `NSPasteboard` cada 1 segundo |
-| Captura de texto | Almacenar hasta 50 textos copiados con los primeros 40 caracteres como preview |
-| Captura de imágenes | Almacenar hasta 20 imágenes copiadas (límite por tipo, independiente del de texto) con miniatura |
-| Lista ordenada | Los items se muestran del más reciente al más antiguo, con los favoritos primero y una divisoria marcando el corte |
-| Favoritos | Marcar/desmarcar items como favoritos con icono de estrella. Los favoritos aparecen siempre antes que el resto, ordenados por fecha entre sí |
+| Captura de texto | Almacenar hasta 50 textos copiados no favoritos, con los primeros 40 caracteres como preview |
+| Captura de imágenes | Almacenar hasta 20 imágenes copiadas no favoritas (límite por tipo, independiente del de texto) con miniatura |
+| Lista ordenada | Dos zonas con scroll independiente separadas por una divisoria: favoritos arriba (hasta 15 filas de alto, nunca más de la mitad del popover) e historial debajo, cada una del más reciente al más antiguo |
+| Favoritos | Marcar/desmarcar items como favoritos con icono de estrella. Son ilimitados —no cuentan para el límite por tipo— y aparecen siempre antes que el resto, ordenados por fecha entre sí |
 | Grupos | Asignar un favorito a un grupo (📁). Asignar grupo auto-favorita el item. La vista Grupos permite crear, renombrar y borrar grupos, y filtrar la lista con checkboxes |
 | Filtro por chips | Encima de las listas, una tira de chips (un grupo cada uno + "Sin grupo") con la misma selección que los checkboxes: sin nada marcado se ve todo; marcando uno o varios, la lista se reduce a esos (OR). Un chip ✕ limpia la selección, que además no se persiste entre arranques |
 | Pegar con un clic | Al clicar un item se copia al portapapeles y se pega (Cmd+V) en la app que estaba activa |

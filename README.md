@@ -42,10 +42,13 @@ clipboard-manager/
 ## Funcionalidades principales
 
 - ✅ Captura automática de texto e imágenes del portapapeles
-- ✅ Hasta 50 textos y 20 imágenes (límite por tipo, no global), ordenados del más
-  reciente al más antiguo; al llenarse cae el **no favorito** más antiguo de ese tipo
-- ✅ Favoritos (⭐) siempre al principio de la lista, separados del resto por una línea;
-  nunca se descartan, así que marcar favoritos puede superar el límite del tipo
+- ✅ Historial de hasta 50 textos y 20 imágenes (límite por tipo, no global), ordenado
+  del más reciente al más antiguo; al llenarse cae el más antiguo de ese tipo
+- ✅ Favoritos (⭐) **ilimitados**: no cuentan para el límite ni se descartan nunca, así
+  que puedes guardar cientos sin comerte el historial reciente
+- ✅ La lista va partida en dos zonas con scroll independiente, separadas por una línea:
+  arriba los favoritos (hasta 15 filas de alto, sin pasar de la mitad del popover) y
+  debajo el historial hasta el borde inferior
 - ✅ Grupos para favoritos: botón 📁 en cada item para asignarlo/reasignarlo, vista
   "Grupos" para crear/renombrar (inline)/eliminar, y checkbox por grupo para filtrar
   qué ítems se muestran en las listas de Texto/Imágenes

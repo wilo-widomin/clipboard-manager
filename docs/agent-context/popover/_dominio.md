@@ -1,6 +1,6 @@
 ---
 dominio: popover
-actualizado: 2026-08-02
+actualizado: 2026-08-12
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
@@ -39,6 +39,11 @@ nativo de clic derecho y la ventana About.
 - `popover.animates = false`: la animación por frame haría que el arrastre de resize
   se sintiera lento.
 - Las filas gestionan su propio cursor (`pointingHand`) y su hover.
+- Texto e Imágenes se pintan con `splitList`: **dos paneles con scroll propio**
+  —favoritos arriba, historial (no favoritos) abajo— separados por la regla gruesa
+  `favoriteDivider`. El panel de favoritos mide hasta 15 filas (`maxFavoriteRows`) y
+  nunca más de la mitad del alto disponible; si no hay historial, lo ocupa todo. Un
+  solo scroll no vale: los favoritos son ilimitados y empujarían el historial fuera.
 
 ## Acciones documentadas
 
