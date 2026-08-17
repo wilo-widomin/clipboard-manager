@@ -1,6 +1,6 @@
 ---
 dominio: edicion-item
-actualizado: 2026-08-02
+actualizado: 2026-08-17
 archivos:
   - Sources/ClipboardManagerKit/UI/DetailEditorWindowController.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -30,6 +30,8 @@ capturado** y se anota un **detalle** libre.
   store.
 - La nota en blanco **sí** es válida: borra el detalle (`nil`).
 - Guardar no toca `createdAt` ni el orden de la lista.
+- La nota **sobrevive a re-copiar el item**: `ClipboardStore.add` hereda `detail` del
+  duplicado que sustituye, igual que el favorito y el grupo.
 - Solo los items `.text` tienen editor de contenido; en imágenes esa sección no se
   monta.
 - `DetailIndicator` (glifo `note.text`) aparece en la fila cuando `hasDetail`, con la

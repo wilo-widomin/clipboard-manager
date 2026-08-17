@@ -1,6 +1,6 @@
 ---
 dominio: historial
-actualizado: 2026-08-12
+actualizado: 2026-08-17
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -55,9 +55,9 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - Des-favoritar **no** re-aplica el cap: el item pasa a competir por el cupo y caerá
   en el siguiente `add` si es el más viejo. A propósito — quitarle la estrella no debe
   hacerlo desaparecer de golpe delante del usuario.
-- `add` deduplica por contenido y **hereda `isFavorite` y `groupID`** del duplicado
-  que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el monitor
-  re-lee) le borraba el grupo.
+- `add` deduplica por contenido y **hereda `isFavorite`, `groupID` y `detail`** del
+  duplicado que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el
+  monitor re-lee) le borraba el grupo y la nota escrita en el editor.
 - Editar texto o detalle **no** cambia `createdAt` ni el orden, a propósito.
 - La fila de texto usa `textLine`: texto completo en una línea (espacios colapsados),
   y quien recorta es la vista con `lineLimit(1)` según el ancho real. `textPreview`

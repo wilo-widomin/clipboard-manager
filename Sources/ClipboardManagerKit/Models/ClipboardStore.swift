@@ -120,13 +120,15 @@ public final class ClipboardStore: ObservableObject {
         // row puts it back on the pasteboard, which the monitor then re-reads)
         // must not create a second copy. Drop the old entry so only one remains;
         // the new one takes its place at the top (it has the newest date).
-        // Carry over the favourite flag AND the group so re-copying an item
-        // (e.g. clicking it to paste) keeps its star and its group assignment —
-        // otherwise the fresh copy, which has no group, would replace it and the
-        // group relationship would silently disappear.
+        // Carry over el favorito, el grupo Y la nota de detalle, para que
+        // re-copiar un item (p. ej. pulsarlo para pegar) conserve su estrella,
+        // su grupo y lo escrito en el editor — si no, la copia recién leída,
+        // que no tiene nada de eso, sustituiría a la vieja y el dato guardado a
+        // mano desaparecería en silencio.
         if let existing = items.first(where: { isDuplicate($0, of: incoming) }) {
             incoming.isFavorite = existing.isFavorite
             incoming.groupID = existing.groupID
+            incoming.detail = existing.detail
             purge(id: existing.id)
         }
 

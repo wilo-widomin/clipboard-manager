@@ -1,7 +1,7 @@
 ---
 dominio: historial
 accion: capturar-item
-actualizado: 2026-08-02
+actualizado: 2026-08-17
 archivos:
   - Sources/ClipboardManagerKit/Monitor/ClipboardMonitor.swift
   - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
@@ -42,4 +42,4 @@ cambiado", así que se sondea `NSPasteboard.changeCount` una vez por segundo.
   `.png`.
 - Pegar desde la app vuelve a escribir en el portapapeles, así que el monitor re-lee
   ese mismo contenido ~1s después: es la vía normal por la que entra un duplicado, y
-  el motivo de que `add` herede favorito y grupo.
+  el motivo de que `add` herede favorito, grupo y nota de detalle.
