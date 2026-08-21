@@ -1,6 +1,6 @@
 ---
 dominio: historial
-actualizado: 2026-08-17
+actualizado: 2026-08-21
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -24,7 +24,8 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - `ImageStorage` (mismo archivo) — carpeta `…/ClipboardManager/images`; `delete` exige
   nombre pelado (rechaza `/`, anti-traversal).
 - `ClipboardStore` — `@Published items` + `groups`, `viewMode` (persistido en
-  UserDefaults), `visibleItems` (filtra por vista **y** por grupo).
+  UserDefaults), `visibleItems` (filtra por vista, por grupo **y** por el buscador —
+  `passes(_:)` = `passesGroupFilter` + `matchesSearch`).
 
 ## Invariantes
 

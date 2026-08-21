@@ -1,9 +1,10 @@
 ---
 dominio: popover
-actualizado: 2026-08-12
+actualizado: 2026-08-21
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/Security/ProtectedAccess.swift
   - src/ClipboardManager/MenuUI/AboutView.swift
   - src/ClipboardManager/MenuUI/AboutWindowController.swift
 depende_de: [historial/_dominio]
@@ -39,6 +40,11 @@ nativo de clic derecho y la ventana About.
 - `popover.animates = false`: la animación por frame haría que el arrastre de resize
   se sintiera lento.
 - Las filas gestionan su propio cursor (`pointingHand`) y su hover.
+- Entre la cabecera y los chips de grupo hay un **buscador** (`searchField`) atado a
+  `store.searchQuery`: filtra por los tres campos de texto del item (contenido,
+  título y nota) sin acentos ni mayúsculas. No se persiste.
+- Una fila **protegida** enseña `item.displayLine` (el título, en cursiva, con un
+  candado), nunca `textLine`. Pegarla o abrir su editor pasa por `ProtectedAccess`.
 - Texto e Imágenes se pintan con `splitList`: **dos paneles con scroll propio**
   —favoritos arriba, historial (no favoritos) abajo— separados por la regla gruesa
   `favoriteDivider`. El panel de favoritos mide hasta 15 filas (`maxFavoriteRows`) y

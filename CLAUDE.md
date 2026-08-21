@@ -43,6 +43,8 @@ Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
 │   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
+├── Security/
+│   └── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min)
 └── UI/
     ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
     ├── PopoverActions.swift          — the seam: what each host injects
@@ -79,6 +81,7 @@ the history no room); with no history below it takes the whole area. One shared 
 is not an option — favourites are unlimited and would push the history off the bottom.
 
 `PopoverRootView` holds the SwiftUI views: a segmented Texto/Imágenes/Grupos picker,
+a search box (filters by text, title and note),
 `ClipboardTextRow` / `ClipboardImageRow` (each with a 📁 `Menu` for group assignment,
 ⭐ favourite, 🗑 delete, and 👁 Quick Look on images), and `GroupsManageView` /
 `GroupManageRow` (checkbox filter + inline rename + delete). It also owns the resize
@@ -90,9 +93,9 @@ live in the status-item right-click menu).
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
-- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note).
 
 ## Groups
 
@@ -144,10 +147,14 @@ live in the status-item right-click menu).
   with the note text as tooltip.
 - Opening the editor goes through the controller (`PopoverActions.editDetail`), like
   paste/Quick Look; the save is a plain data mutation straight to the store.
-- There is **no authentication gate**: it was dropped (an earlier version used
-  `LocalAuthentication`) because the note is stored in clear text in `store.json`
-  anyway, so the prompt bought no real protection — only friction. Don't reintroduce
-  it without also encrypting the note.
+- **Protected items** (text only): the editor has a `Protegido` switch plus a
+  `title`. When protected the list shows the title (italic, with a lock) instead of
+  the captured text, and both revealing actions — pasting the item and opening the
+  editor — go through `ProtectedAccess` (`deviceOwnerAuthentication`: Touch ID or the
+  macOS user password) with a **15-minute in-memory grace window**. Inside the editor
+  the captured text is a `SecureField`, toggled to a plain editor by the eye button.
+- The gate **hides, it does not encrypt**: the text still lives in clear in
+  `store.json`. Encrypting it at rest is the next step (`docs/05-blueprint-sync-android.md`).
 
 ## Code Standards
 

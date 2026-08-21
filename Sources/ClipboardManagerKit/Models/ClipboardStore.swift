@@ -40,6 +40,11 @@ public final class ClipboardStore: ObservableObject {
     /// persisted — the filter is a per-session aid that starts empty on launch.
     @Published public var showUngrouped: Bool = false
 
+    /// Texto del buscador. Filtra las listas por los tres campos de texto del
+    /// item (contenido, título y nota). **No se persiste**: como el filtro de
+    /// grupos, es una ayuda de sesión y el popover abre siempre sin filtrar.
+    @Published public var searchQuery: String = ""
+
     /// Which view the menu should show. Persisted in UserDefaults.
     @Published public var viewMode: ClipboardViewMode = .text {
         didSet {
@@ -47,16 +52,42 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Items filtered by the current view mode and the active group filter.
+    /// Items filtered by the current view mode, the active group filter and the
+    /// search query.
     public var visibleItems: [ClipboardItem] {
         switch viewMode {
         case .text:
-            return items.filter { $0.contentType == .text && passesGroupFilter($0) }
+            return items.filter { $0.contentType == .text && passes($0) }
         case .images:
-            return items.filter { $0.contentType == .image && passesGroupFilter($0) }
+            return items.filter { $0.contentType == .image && passes($0) }
         case .groups:
             return []
         }
+    }
+
+    /// Los dos filtros de sesión juntos: grupo y buscador.
+    public func passes(_ item: ClipboardItem) -> Bool {
+        passesGroupFilter(item) && matchesSearch(item)
+    }
+
+    /// Busca en los **tres campos de texto** del item: el contenido capturado,
+    /// el título y la nota. Sin acentos y sin distinguir mayúsculas.
+    ///
+    /// Un item protegido también se busca por su contenido aunque la fila no lo
+    /// enseñe: si no, un texto protegido sería imposible de encontrar y el
+    /// título tendría que repetir lo que se quiere esconder.
+    public func matchesSearch(_ item: ClipboardItem) -> Bool {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        let needle = Self.fold(query)
+        return [item.textContent, item.title, item.detail]
+            .compactMap { $0 }
+            .contains { Self.fold($0).contains(needle) }
+    }
+
+    /// Normaliza para comparar: minúsculas y sin diacríticos.
+    private static func fold(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     }
 
     /// Whether any group filter is currently selected. When false, the filter is
@@ -129,6 +160,8 @@ public final class ClipboardStore: ObservableObject {
             incoming.isFavorite = existing.isFavorite
             incoming.groupID = existing.groupID
             incoming.detail = existing.detail
+            incoming.title = existing.title
+            incoming.isProtected = existing.isProtected
             purge(id: existing.id)
         }
 
@@ -253,6 +286,23 @@ public final class ClipboardStore: ObservableObject {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         items[idx].detail = trimmed.isEmpty ? nil : trimmed
+        persist()
+    }
+
+    /// Marca o desmarca un item de texto como protegido, con el título que la
+    /// lista enseñará en lugar del contenido.
+    ///
+    /// **Solo items de texto**: una imagen se revela en su propia miniatura, así
+    /// que esconder su texto no protegería nada. Proteger sin título dejaría la
+    /// fila sin nada que mostrar, así que se exige título; al desproteger, el
+    /// título se conserva por si vuelve a activarse.
+    public func setProtection(id: ClipboardItem.ID, isProtected: Bool, title: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }),
+              items[idx].contentType == .text else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isProtected && trimmed.isEmpty { return }
+        items[idx].isProtected = isProtected
+        items[idx].title = trimmed.isEmpty ? nil : trimmed
         persist()
     }
 

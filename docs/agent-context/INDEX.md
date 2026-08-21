@@ -10,8 +10,8 @@ haber mirado su documento.
 |---|---|
 | capturar lo copiado, monitor, duplicados, límites, favoritos, orden, borrar, vaciar, persistencia de items | `historial/` |
 | grupos, carpetas, asignar, renombrar, filtro, chips/badges, "Sin grupo", flechas de la tira | `grupos/` |
-| icono de la barra, popover, pestañas Texto/Imágenes/Grupos, filas, pegar, Cmd+V, foco, Quick Look, tamaño, cursores, About | `popover/` |
-| clic derecho en una fila, editar el texto copiado, nota de detalle, ventana del editor | `edicion-item/` |
+| icono de la barra, popover, pestañas Texto/Imágenes/Grupos, filas, buscador, pegar, Cmd+V, foco, Quick Look, tamaño, cursores, About | `popover/` |
+| clic derecho en una fila, editar el texto copiado, nota de detalle, ventana del editor, items protegidos, autenticación | `edicion-item/` |
 
 Transversal:
 - `arquitectura.md` — stack, capas, arranque, build/dmg, dónde viven los datos.
@@ -26,7 +26,8 @@ como dependencia SPM. Si un segundo anfitrión lo necesitaría, va al paquete.
 - `Sources/ClipboardManagerKit/Models/` — `ClipboardItem`, `ClipboardGroup`, `ClipboardStore`
 - `Sources/ClipboardManagerKit/Monitor/` — polling del portapapeles
 - `Sources/ClipboardManagerKit/Persistence/` — JSON (`store.json` + `groups.json`)
-- `Sources/ClipboardManagerKit/UI/` — popover, filas, chips, editor, `PopoverActions`
+- `Sources/ClipboardManagerKit/UI/` — popover, filas, chips, buscador, editor, `PopoverActions`
+- `Sources/ClipboardManagerKit/Security/` — `ProtectedAccess` (items protegidos)
 - `src/ClipboardManager/App/` — entry point (`AppDelegate`), Info.plist, versión
 - `src/ClipboardManager/MenuUI/` — status item (foco/pegado) y About: **solo** app suelta
 - `docs/01..04-*.md` — documentación de producto (visión, ADD, user stories, diagrama)

@@ -147,6 +147,8 @@ public struct PopoverRootView: View {
             header
             Divider()
             if store.viewMode != .groups {
+                searchField
+                Divider()
                 GroupFilterBadges(store: store)
                 Divider()
             }
@@ -275,6 +277,27 @@ public struct PopoverRootView: View {
         .padding(10)
     }
 
+    /// Buscador: filtra por contenido, título y nota (ver `matchesSearch`).
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Buscar", text: $store.searchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+            if !store.searchQuery.isEmpty {
+                Button { store.searchQuery = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Limpiar la búsqueda")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
     private func trashButton(_ help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "trash")
@@ -296,7 +319,7 @@ public struct PopoverRootView: View {
     }
 
     private var textList: some View {
-        let items = store.items.filter { $0.contentType == .text && store.passesGroupFilter($0) }
+        let items = store.items.filter { $0.contentType == .text && store.passes($0) }
         return splitList(
             items: items,
             rowHeight: Self.textRowHeight,
@@ -305,8 +328,8 @@ public struct PopoverRootView: View {
             ClipboardTextRow(
                 item: item,
                 groups: store.groups,
-                onSelect: { actions.selectItem(item) },
-                onEditDetail: { actions.editDetail(item) },
+                onSelect: { paste(item) },
+                onEditDetail: { edit(item) },
                 onToggleFavorite: { store.toggleFavorite(id: item.id) },
                 onDelete: { store.remove(id: item.id) },
                 onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
@@ -315,8 +338,23 @@ public struct PopoverRootView: View {
         }
     }
 
+    /// Pegar y editar son las dos acciones que **revelan** el contenido, así que
+    /// en un item protegido pasan por la autenticación (con su ventana de
+    /// gracia). Favorito, grupo y borrar no enseñan nada y van directos.
+    private func paste(_ item: ClipboardItem) {
+        ProtectedAccess.run(for: item, reason: "copiar un elemento protegido") {
+            actions.selectItem(item)
+        }
+    }
+
+    private func edit(_ item: ClipboardItem) {
+        ProtectedAccess.run(for: item, reason: "abrir un elemento protegido") {
+            actions.editDetail(item)
+        }
+    }
+
     private var imageList: some View {
-        let items = store.items.filter { $0.contentType == .image && store.passesGroupFilter($0) }
+        let items = store.items.filter { $0.contentType == .image && store.passes($0) }
         return splitList(
             items: items,
             rowHeight: Self.imageRowHeight,
@@ -325,8 +363,8 @@ public struct PopoverRootView: View {
             ClipboardImageRow(
                 item: item,
                 groups: store.groups,
-                onSelect: { actions.selectItem(item) },
-                onEditDetail: { actions.editDetail(item) },
+                onSelect: { paste(item) },
+                onEditDetail: { edit(item) },
                 onQuickLook: { actions.quickLook(item) },
                 onToggleFavorite: { store.toggleFavorite(id: item.id) },
                 onDelete: { store.remove(id: item.id) },
@@ -683,7 +721,9 @@ struct DetailIndicator: View {
         if item.hasDetail {
             Image(systemName: "note.text")
                 .foregroundStyle(.secondary)
-                .help(item.detail ?? "")
+                // La nota de un item protegido no se enseña en el tooltip: el
+                // candado no valdría de nada si el globo de ayuda la cantara.
+                .help(item.isProtected ? "Nota protegida" : (item.detail ?? ""))
         }
     }
 }
@@ -704,8 +744,15 @@ struct ClipboardTextRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(item.textLine)
+            if item.isProtected {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(.secondary)
+                    .help("Protegido: pide autenticación para copiarlo o abrirlo")
+            }
+            // Nunca `textLine`: en un item protegido esto enseña el título.
+            Text(item.displayLine)
                 .font(.system(size: 13))
+                .italic(item.isProtected)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)

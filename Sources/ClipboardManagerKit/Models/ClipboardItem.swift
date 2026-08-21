@@ -44,10 +44,27 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     /// the factory methods below need no extra argument.
     public var detail: String? = nil
 
+    /// Short label shown in the list **instead of** the captured text when the
+    /// item is protected. Optional so older `store.json` files decode cleanly.
+    public var title: String? = nil
+
+    /// Protected items hide their captured text: the list shows `title`, and
+    /// opening the editor or pasting the item asks for the macOS user password
+    /// / Touch ID first. Text items only — an image reveals itself in its own
+    /// thumbnail, so hiding its text would protect nothing.
+    public var isProtected: Bool = false
+
     /// Whether the item carries a non-empty detail note.
     public var hasDetail: Bool {
         guard let detail = detail else { return false }
         return !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// El título, ya recortado, o `nil` si está vacío.
+    public var trimmedTitle: String? {
+        guard let title = title else { return nil }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     // MARK: - Preview helpers
@@ -61,6 +78,16 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
+    }
+
+    /// Lo que la fila enseña: el texto capturado, o el título cuando el item
+    /// está protegido. Nunca devuelve el contenido de un item protegido — es la
+    /// única propiedad que deben usar las filas.
+    public var displayLine: String {
+        if isProtected {
+            return trimmedTitle ?? "Elemento protegido"
+        }
+        return textLine
     }
 
     /// First 40 characters of the text, followed by "..." if truncated.
@@ -121,6 +148,31 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
             imageFilename: filename,
             isFavorite: false
         )
+    }
+}
+
+// MARK: - Codable tolerante
+
+extension ClipboardItem {
+
+    /// Decodificación tolerante con los `store.json` escritos por versiones
+    /// anteriores. El `init(from:)` sintetizado exige que **todas** las claves no
+    /// opcionales estén presentes —los valores por defecto de las propiedades no
+    /// se aplican al decodificar—, así que un archivo sin `isProtected` fallaría
+    /// entero y el historial aparecería vacío. Va en una extensión para no
+    /// suprimir el init por miembros que usan las factorías.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        contentType = try container.decode(ClipboardContentType.self, forKey: .contentType)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        textContent = try container.decodeIfPresent(String.self, forKey: .textContent)
+        imageFilename = try container.decodeIfPresent(String.self, forKey: .imageFilename)
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        groupID = try container.decodeIfPresent(UUID.self, forKey: .groupID)
+        detail = try container.decodeIfPresent(String.self, forKey: .detail)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        isProtected = try container.decodeIfPresent(Bool.self, forKey: .isProtected) ?? false
     }
 }
 
