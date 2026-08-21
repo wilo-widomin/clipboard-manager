@@ -1,9 +1,10 @@
 ---
-actualizado: 2026-08-02
+actualizado: 2026-08-21
 archivos:
   - Package.swift
   - src/ClipboardManager/App/AppDelegate.swift
   - src/ClipboardManager/App/AppInfo.swift
+  - src/ClipboardManager/App/EditMenu.swift
   - src/ClipboardManager/App/Info.plist
   - Sources/ClipboardManagerKit/Persistence/JSONPersistenceService.swift
   - Sources/ClipboardManagerKit/UI/PopoverActions.swift
@@ -40,9 +41,17 @@ En `src/ClipboardManager/` solo queda lo que exige ser dueño de la barra de men
 
 ## Capas
 
-`AppDelegate` (entry point programático, sin storyboard) crea
+`AppDelegate` (entry point programático, sin storyboard) instala el menú principal
+mínimo de `EditMenu` y crea
 `JSONPersistenceService` → `ClipboardStore` → `StatusItemController`, y arranca un
 `Timer` de 1 Hz que llama a `ClipboardMonitor.tick()`.
+
+**El menú principal existe aunque no se vea.** Siendo una app `.accessory` no hay
+barra de menús, pero AppKit resuelve los atajos de teclado estándar recorriendo
+`NSApp.mainMenu`: sin él, Cmd+C / Cmd+V / Cmd+X / Cmd+A / Cmd+Z no funcionan dentro
+de ningún campo de texto de la app (editor de item, renombrado de grupo). `EditMenu`
+instala un menú «Edición» invisible solo para que esos key equivalents lleguen al
+first responder. No lo quites por «no se usa».
 
 ```
 NSPasteboard → ClipboardMonitor → ClipboardStore (@Published) → SwiftUI en NSPopover

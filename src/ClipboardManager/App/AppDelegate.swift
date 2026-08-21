@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // app with no Dock presence and no application menu in the menu bar.
         application.setActivationPolicy(.accessory)
 
+        // Sin menú principal no hay atajos de edición en los campos de texto.
+        EditMenu.install(on: application)
+
         application.run()
     }
 

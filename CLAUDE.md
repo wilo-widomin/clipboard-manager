@@ -53,6 +53,7 @@ src/ClipboardManager/          — STANDALONE APP ONLY
 ├── App/
 │   ├── AppDelegate.swift     — @main entry, LSUIElement, tick timer
 │   ├── AppInfo.swift         — name, version, author credit (widomin.com)
+│   ├── EditMenu.swift        — menú principal invisible: sin él no hay Cmd+C/V en los campos
 │   └── Info.plist
 ├── MenuUI/
 │   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
