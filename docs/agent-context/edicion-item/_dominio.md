@@ -38,6 +38,8 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
 - `PasswordGenerator` — valor puro: largo 8–64, mayúsculas/minúsculas/números/símbolos
   y «símbolos extra» (se suman a los de serie; con «Símbolos» apagado, solo estos).
   Garantiza un carácter de cada categoría activa y usa `SystemRandomNumberGenerator`.
+  Los «símbolos extra» se recuerdan entre usos (`@AppStorage`, clave
+  `passwordGeneratorExtraSymbols`); el resto de opciones vuelve a su valor por defecto.
 - Mutaciones: `store.setTextContent(id:text:)`, `store.setDetail(id:detail:)` y
   `store.setProtection(id:isProtected:title:)`.
 

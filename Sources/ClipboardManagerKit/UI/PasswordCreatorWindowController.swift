@@ -73,7 +73,9 @@ struct PasswordCreatorView: View {
     @State private var useLowercase = true
     @State private var useDigits = true
     @State private var useSymbols = true
-    @State private var extraSymbols = ""
+    /// Los símbolos extra se recuerdan entre usos (UserDefaults): quien los
+    /// escribe una vez los quiere en la siguiente contraseña sin reescribirlos.
+    @AppStorage("passwordGeneratorExtraSymbols") private var extraSymbols = ""
 
     private var generator: PasswordGenerator {
         PasswordGenerator(
