@@ -1,9 +1,11 @@
 ---
 dominio: edicion-item
-actualizado: 2026-08-21
+actualizado: 2026-11-12
 archivos:
   - Sources/ClipboardManagerKit/UI/DetailEditorWindowController.swift
+  - Sources/ClipboardManagerKit/UI/PasswordCreatorWindowController.swift
   - Sources/ClipboardManagerKit/Security/ProtectedAccess.swift
+  - Sources/ClipboardManagerKit/Security/PasswordGenerator.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
 depende_de: [historial/_dominio, popover/_dominio]
 ---
@@ -29,6 +31,13 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
 - `RightClickCatcher` — `NSViewRepresentable` superpuesto a la fila; su `hitTest`
   solo devuelve la vista cuando el evento actual es `.rightMouseDown`, de forma que
   clics izquierdos, botones y hover atraviesan.
+- `PasswordCreatorWindowController` / `PasswordCreatorView` — modal «Nueva contraseña»
+  (ventana propia, como el editor): título, contraseña (tapada, con ojo), generador,
+  detalle, grupo y `Protegida`. Se abre desde el pie de la pestaña Texto y guarda con
+  `store.addManual(...)`.
+- `PasswordGenerator` — valor puro: largo 8–64, mayúsculas/minúsculas/números/símbolos
+  y «símbolos extra» (se suman a los de serie; con «Símbolos» apagado, solo estos).
+  Garantiza un carácter de cada categoría activa y usa `SystemRandomNumberGenerator`.
 - Mutaciones: `store.setTextContent(id:text:)`, `store.setDetail(id:detail:)` y
   `store.setProtection(id:isProtected:title:)`.
 
@@ -50,6 +59,10 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
 - La ventana de gracia vive solo en memoria: al reabrir la app siempre pregunta.
 - `DetailIndicator` (glifo `note.text`) aparece en la fila cuando `hasDetail`, con la
   nota como tooltip.
+
+- Un item creado a mano (`addManual`) nace **favorito** —si no, el tope de 50 textos
+  lo borraría— y **no pasa por la deduplicación** de `add`. Se rechaza sin contraseña
+  o, si va protegido, sin título. No tiene estado propio: es un item de texto normal.
 
 ## Trampas
 

@@ -154,7 +154,27 @@ public struct PopoverRootView: View {
             }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if store.viewMode == .text {
+                Divider()
+                newPasswordBar
+            }
         }
+    }
+
+    /// Pie de la pestaña Texto: abre el modal para crear a mano una contraseña.
+    private var newPasswordBar: some View {
+        Button {
+            PasswordCreatorWindowController.show(store: store)
+        } label: {
+            Label("Nueva contraseña", systemImage: "plus")
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .help("Crear una contraseña que no está en el portapapeles")
     }
 
     /// The list plus whatever sizing the host implies: our own popover chrome

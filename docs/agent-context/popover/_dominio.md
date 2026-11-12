@@ -1,6 +1,6 @@
 ---
 dominio: popover
-actualizado: 2026-08-21
+actualizado: 2026-11-12
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
@@ -45,6 +45,8 @@ nativo de clic derecho y la ventana About.
   título y nota) sin acentos ni mayúsculas. No se persiste.
 - Una fila **protegida** enseña `item.displayLine` (el título, en cursiva, con un
   candado), nunca `textLine`. Pegarla o abrir su editor pasa por `ProtectedAccess`.
+- La pestaña Texto lleva un **pie fijo** «Nueva contraseña» (`newPasswordBar`) que abre
+  el modal de creación (ver [edicion-item](../edicion-item/_dominio.md)).
 - Texto e Imágenes se pintan con `splitList`: **dos paneles con scroll propio**
   —favoritos arriba, historial (no favoritos) abajo— separados por la regla gruesa
   `favoriteDivider`. El panel de favoritos mide hasta 15 filas (`maxFavoriteRows`) y

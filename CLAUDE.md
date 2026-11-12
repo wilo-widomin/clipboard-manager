@@ -44,12 +44,14 @@ Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 ├── Persistence/
 │   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
 ├── Security/
-│   └── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min)
+│   ├── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min)
+│   └── PasswordGenerator.swift — generador de contraseñas (largo, tipos, símbolos extra)
 └── UI/
     ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
     ├── PopoverActions.swift          — the seam: what each host injects
     ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
-    └── DetailEditorWindowController.swift — item editor window + RightClickCatcher
+    ├── DetailEditorWindowController.swift — item editor window + RightClickCatcher
+    └── PasswordCreatorWindowController.swift — modal «Nueva contraseña» (item manual + generador)
 
 src/ClipboardManager/          — STANDALONE APP ONLY
 ├── App/
@@ -155,6 +157,13 @@ live in the status-item right-click menu).
   the captured text is a `SecureField`, toggled to a plain editor by the eye button.
 - The gate **hides, it does not encrypt**: the text still lives in clear in
   `store.json`. Encrypting it at rest is the next step (`docs/05-blueprint-sync-android.md`).
+
+## Contraseñas creadas a mano
+
+- El pie «Nueva contraseña» de la pestaña Texto abre un modal (ventana propia) con
+  título, contraseña, generador, detalle, grupo y `Protegida` (activada por defecto).
+- Guarda con `ClipboardStore.addManual`: un item de texto normal, **favorito** (para
+  esquivar el tope) y sin deduplicar. No hay tipo aparte.
 
 ## Code Standards
 

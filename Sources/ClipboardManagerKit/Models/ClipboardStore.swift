@@ -306,6 +306,40 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
+    /// Crea a mano un item de texto que nunca pasó por el portapapeles (una
+    /// contraseña generada, por ejemplo) y lo guarda.
+    ///
+    /// Nace **favorito**: solo los favoritos escapan al límite por tipo, y si
+    /// no, el historial acabaría borrándolo. No pasa por la deduplicación de
+    /// `add`: no es una captura, y no debe fundirse con otro item igual.
+    /// Se rechaza (devuelve `nil`) un texto en blanco o, si va protegido, sin
+    /// título, por las mismas razones que `setTextContent` y `setProtection`.
+    @discardableResult
+    public func addManual(
+        title: String,
+        text: String,
+        detail: String,
+        groupID: ClipboardGroup.ID?,
+        isProtected: Bool
+    ) -> ClipboardItem.ID? {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isProtected && trimmedTitle.isEmpty { return nil }
+
+        var item = ClipboardItem.text(text)
+        item.isFavorite = true
+        item.isProtected = isProtected
+        item.title = trimmedTitle.isEmpty ? nil : trimmedTitle
+        let note = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.detail = note.isEmpty ? nil : note
+        if let groupID = groupID, groups.contains(where: { $0.id == groupID }) {
+            item.groupID = groupID
+        }
+        items = sort(items + [item])
+        persist()
+        return item.id
+    }
+
     /// Clears all non-favourite items. Also deletes their image files from disk.
     public func clearNonFavorites() {
         let before = items.count
