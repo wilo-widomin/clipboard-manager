@@ -3,10 +3,10 @@
 //  ClipboardManager
 //
 //  ObservableObject single source of truth for all clipboard items.
-//  Capped per content type (50 text, 20 images), never globally; only
-//  non-favourites are evicted, so favourites can push a type past its
-//  limit. Favourites always sort first, then the rest — both groups
-//  ordered by creation date descending.
+//  Capped per content type (50 text, 20 images), never globally, and the
+//  cap counts **only non-favourites**: favourites are unlimited and don't
+//  consume the history budget. Favourites always sort first, then the
+//  rest — both groups ordered by creation date descending.
 //
 
 import Foundation
@@ -23,7 +23,7 @@ public enum ClipboardViewMode: String, Codable, Sendable, Hashable {
 @MainActor
 public final class ClipboardStore: ObservableObject {
 
-    // Separate limits per content type.
+    // Separate limits per content type, applied only to non-favourites.
     private let maxTextItems = 50
     private let maxImageItems = 20
 
@@ -40,6 +40,11 @@ public final class ClipboardStore: ObservableObject {
     /// persisted — the filter is a per-session aid that starts empty on launch.
     @Published public var showUngrouped: Bool = false
 
+    /// Texto del buscador. Filtra las listas por los tres campos de texto del
+    /// item (contenido, título y nota). **No se persiste**: como el filtro de
+    /// grupos, es una ayuda de sesión y el popover abre siempre sin filtrar.
+    @Published public var searchQuery: String = ""
+
     /// Which view the menu should show. Persisted in UserDefaults.
     @Published public var viewMode: ClipboardViewMode = .text {
         didSet {
@@ -47,16 +52,42 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Items filtered by the current view mode and the active group filter.
+    /// Items filtered by the current view mode, the active group filter and the
+    /// search query.
     public var visibleItems: [ClipboardItem] {
         switch viewMode {
         case .text:
-            return items.filter { $0.contentType == .text && passesGroupFilter($0) }
+            return items.filter { $0.contentType == .text && passes($0) }
         case .images:
-            return items.filter { $0.contentType == .image && passesGroupFilter($0) }
+            return items.filter { $0.contentType == .image && passes($0) }
         case .groups:
             return []
         }
+    }
+
+    /// Los dos filtros de sesión juntos: grupo y buscador.
+    public func passes(_ item: ClipboardItem) -> Bool {
+        passesGroupFilter(item) && matchesSearch(item)
+    }
+
+    /// Busca en los **tres campos de texto** del item: el contenido capturado,
+    /// el título y la nota. Sin acentos y sin distinguir mayúsculas.
+    ///
+    /// Un item protegido también se busca por su contenido aunque la fila no lo
+    /// enseñe: si no, un texto protegido sería imposible de encontrar y el
+    /// título tendría que repetir lo que se quiere esconder.
+    public func matchesSearch(_ item: ClipboardItem) -> Bool {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        let needle = Self.fold(query)
+        return [item.textContent, item.title, item.detail]
+            .compactMap { $0 }
+            .contains { Self.fold($0).contains(needle) }
+    }
+
+    /// Normaliza para comparar: minúsculas y sin diacríticos.
+    private static func fold(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     }
 
     /// Whether any group filter is currently selected. When false, the filter is
@@ -120,13 +151,17 @@ public final class ClipboardStore: ObservableObject {
         // row puts it back on the pasteboard, which the monitor then re-reads)
         // must not create a second copy. Drop the old entry so only one remains;
         // the new one takes its place at the top (it has the newest date).
-        // Carry over the favourite flag AND the group so re-copying an item
-        // (e.g. clicking it to paste) keeps its star and its group assignment —
-        // otherwise the fresh copy, which has no group, would replace it and the
-        // group relationship would silently disappear.
+        // Carry over el favorito, el grupo Y la nota de detalle, para que
+        // re-copiar un item (p. ej. pulsarlo para pegar) conserve su estrella,
+        // su grupo y lo escrito en el editor — si no, la copia recién leída,
+        // que no tiene nada de eso, sustituiría a la vieja y el dato guardado a
+        // mano desaparecería en silencio.
         if let existing = items.first(where: { isDuplicate($0, of: incoming) }) {
             incoming.isFavorite = existing.isFavorite
             incoming.groupID = existing.groupID
+            incoming.detail = existing.detail
+            incoming.title = existing.title
+            incoming.isProtected = existing.isProtected
             purge(id: existing.id)
         }
 
@@ -167,7 +202,7 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Maximum items allowed for a given content type.
+    /// Maximum **non-favourite** items allowed for a given content type.
     private func maxCount(for contentType: ClipboardContentType) -> Int {
         switch contentType {
         case .text:  return maxTextItems
@@ -175,16 +210,19 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Drops oldest non-favourite items of `type` until that type is within its
-    /// limit. Deletes the image file of any dropped image item.
+    /// Drops oldest non-favourite items of `type` until the **non-favourites**
+    /// of that type are within the limit. Favourites are not counted and never
+    /// dropped: they can be hundreds without eating the history budget (the old
+    /// behaviour counted them, so a list full of favourites left no room at all
+    /// for freshly copied items). Deletes the image file of any dropped item.
     private func cap(_ list: [ClipboardItem], type: ClipboardContentType) -> [ClipboardItem] {
         var result = list
         let limit = maxCount(for: type)
-        while result.filter({ $0.contentType == type }).count > limit {
+        while result.filter({ $0.contentType == type && !$0.isFavorite }).count > limit {
             guard let drop = result
                 .filter({ $0.contentType == type && !$0.isFavorite })
                 .min(by: { $0.createdAt < $1.createdAt })
-            else { break }  // only favourites left — keep them
+            else { break }
             result.removeAll { $0.id == drop.id }
             if let filename = drop.imageFilename {
                 ImageStorage.delete(filename: filename)
@@ -249,6 +287,57 @@ public final class ClipboardStore: ObservableObject {
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         items[idx].detail = trimmed.isEmpty ? nil : trimmed
         persist()
+    }
+
+    /// Marca o desmarca un item de texto como protegido, con el título que la
+    /// lista enseñará en lugar del contenido.
+    ///
+    /// **Solo items de texto**: una imagen se revela en su propia miniatura, así
+    /// que esconder su texto no protegería nada. Proteger sin título dejaría la
+    /// fila sin nada que mostrar, así que se exige título; al desproteger, el
+    /// título se conserva por si vuelve a activarse.
+    public func setProtection(id: ClipboardItem.ID, isProtected: Bool, title: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }),
+              items[idx].contentType == .text else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isProtected && trimmed.isEmpty { return }
+        items[idx].isProtected = isProtected
+        items[idx].title = trimmed.isEmpty ? nil : trimmed
+        persist()
+    }
+
+    /// Crea a mano un item de texto que nunca pasó por el portapapeles (una
+    /// contraseña generada, por ejemplo) y lo guarda.
+    ///
+    /// Nace **favorito**: solo los favoritos escapan al límite por tipo, y si
+    /// no, el historial acabaría borrándolo. No pasa por la deduplicación de
+    /// `add`: no es una captura, y no debe fundirse con otro item igual.
+    /// Se rechaza (devuelve `nil`) un texto en blanco o, si va protegido, sin
+    /// título, por las mismas razones que `setTextContent` y `setProtection`.
+    @discardableResult
+    public func addManual(
+        title: String,
+        text: String,
+        detail: String,
+        groupID: ClipboardGroup.ID?,
+        isProtected: Bool
+    ) -> ClipboardItem.ID? {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isProtected && trimmedTitle.isEmpty { return nil }
+
+        var item = ClipboardItem.text(text)
+        item.isFavorite = true
+        item.isProtected = isProtected
+        item.title = trimmedTitle.isEmpty ? nil : trimmedTitle
+        let note = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.detail = note.isEmpty ? nil : note
+        if let groupID = groupID, groups.contains(where: { $0.id == groupID }) {
+            item.groupID = groupID
+        }
+        items = sort(items + [item])
+        persist()
+        return item.id
     }
 
     /// Clears all non-favourite items. Also deletes their image files from disk.

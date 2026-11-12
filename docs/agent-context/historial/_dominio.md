@@ -1,11 +1,11 @@
 ---
 dominio: historial
-actualizado: 2026-08-02
+actualizado: 2026-11-12
 archivos:
-  - src/ClipboardManager/Models/ClipboardItem.swift
-  - src/ClipboardManager/Models/ClipboardStore.swift
-  - src/ClipboardManager/Monitor/ClipboardMonitor.swift
-  - src/ClipboardManager/Persistence/JSONPersistenceService.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/Monitor/ClipboardMonitor.swift
+  - Sources/ClipboardManagerKit/Persistence/JSONPersistenceService.swift
 depende_de: [grupos/_dominio]
 ---
 
@@ -24,7 +24,8 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - `ImageStorage` (mismo archivo) — carpeta `…/ClipboardManager/images`; `delete` exige
   nombre pelado (rechaza `/`, anti-traversal).
 - `ClipboardStore` — `@Published items` + `groups`, `viewMode` (persistido en
-  UserDefaults), `visibleItems` (filtra por vista **y** por grupo).
+  UserDefaults), `visibleItems` (filtra por vista, por grupo **y** por el buscador —
+  `passes(_:)` = `passesGroupFilter` + `matchesSearch`).
 
 ## Invariantes
 
@@ -33,12 +34,18 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - Límite **por tipo**, nunca global: 50 textos, 20 imágenes (`maxTextItems` /
   `maxImageItems`). Se aplica también al cargar (`capAllTypes`), para normalizar un
   store que creció con límites anteriores.
-- Solo se expulsan **no favoritos**: un tipo puede superar su límite a base de estrellas.
+- El límite cuenta **solo los no favoritos**: los favoritos son ilimitados (pueden ser
+  cientos) y no consumen cupo. Solo se expulsan no favoritos, el más viejo primero.
 - Al desaparecer un item de imagen (expulsión, borrado, vaciado, dedupe) se borra su
   PNG del disco. Es la única forma de no dejar basura en `images/`.
 - Des-favoritar limpia `groupID` (pertenecer a un grupo implica ser favorito).
 - Cada mutación pública persiste; `purge` es la excepción privada (no persiste, lo
   hace quien la llama).
+
+- Hay **dos entradas** de items: `add` (lo captura el monitor; deduplica) y `addManual`
+  (el modal «Nueva contraseña»; ver [edicion-item](../edicion-item/_dominio.md)). Este
+  último nace favorito, protegido si se pide, **no deduplica** y rechaza texto en
+  blanco o protegido sin título.
 
 ## Acciones documentadas
 
@@ -47,11 +54,18 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 
 ## Trampas
 
-- El cap cuenta **items de ese tipo**, no el total. Comparar contra `items.count`
-  reintroduce un bug ya sufrido: borraba la imagen recién añadida.
-- `add` deduplica por contenido y **hereda `isFavorite` y `groupID`** del duplicado
-  que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el monitor
-  re-lee) le borraba el grupo.
+- El cap cuenta **los no favoritos de ese tipo**, no el total. Comparar contra
+  `items.count` reintroduce un bug ya sufrido (borraba la imagen recién añadida);
+  contar también los favoritos reintroduce el otro: con la lista llena de estrellas
+  el cupo quedaba a cero y cada item nuevo se autoexpulsaba al instante.
+- Des-favoritar **no** re-aplica el cap: el item pasa a competir por el cupo y caerá
+  en el siguiente `add` si es el más viejo. A propósito — quitarle la estrella no debe
+  hacerlo desaparecer de golpe delante del usuario.
+- `add` deduplica por contenido y **hereda `isFavorite`, `groupID` y `detail`** del
+  duplicado que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el
+  monitor re-lee) le borraba el grupo y la nota escrita en el editor.
 - Editar texto o detalle **no** cambia `createdAt` ni el orden, a propósito.
-- `textPreview` recorta a 40 caracteres y hace trim: es solo para la fila, nunca para
-  pegar ni comparar.
+- La fila de texto usa `textLine`: texto completo en una línea (espacios colapsados),
+  y quien recorta es la vista con `lineLimit(1)` según el ancho real. `textPreview`
+  (40 caracteres + "...") sigue existiendo para otros anfitriones. Ninguno de los dos
+  sirve para pegar ni comparar.

@@ -29,7 +29,7 @@ enum Cursors {
 
 /// Persisted, clamped popover size. Shared by the SwiftUI content (which drives
 /// the live size while dragging the resize grip) and the controller (initial size).
-enum PopoverSize {
+public enum PopoverSize {
     static let minWidth: CGFloat = 300
     static let minHeight: CGFloat = 260
     static let maxWidth: CGFloat = 760
@@ -43,9 +43,9 @@ enum PopoverSize {
     /// right before showing the popover, because that's the display the popover
     /// opens on — `NSScreen.main` follows the key window and, in an LSUIElement
     /// app that isn't active yet, can easily point at a different one.
-    static var activeScreen: NSScreen?
+    public static var activeScreen: NSScreen?
 
-    static func saved() -> CGSize {
+    public static func saved() -> CGSize {
         let d = UserDefaults.standard
         guard d.object(forKey: "popoverWidth") != nil else { return clamp(defaultSize) }
         let w = clampWidth(CGFloat(d.double(forKey: "popoverWidth")))
@@ -82,10 +82,25 @@ enum PopoverSize {
     }
 }
 
-struct PopoverRootView: View {
+public struct PopoverRootView: View {
 
     @ObservedObject var store: ClipboardStore
     let actions: PopoverActions
+
+    /// Whether this view owns the window it lives in.
+    ///
+    /// The standalone app hosts it in an `NSPopover` of its own, so the view
+    /// dictates its size and draws the resize handles. Embedded in another app
+    /// (Widomin), the host owns the popover and its chrome, so the view just
+    /// fills whatever space it is given — drawing grips there would let the user
+    /// drag against a size the host controls.
+    let ownsWindow: Bool
+
+    public init(store: ClipboardStore, actions: PopoverActions, ownsWindow: Bool = true) {
+        self.store = store
+        self.actions = actions
+        self.ownsWindow = ownsWindow
+    }
 
     // New-group prompt state. `assignTo` carries the item to auto-assign the
     // freshly created group to (nil for a standalone create from the Grupos tab).
@@ -106,31 +121,8 @@ struct PopoverRootView: View {
     private static let edge: CGFloat = 8
     private static let corner: CGFloat = 16
 
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            if store.viewMode != .groups {
-                GroupFilterBadges(store: store)
-                Divider()
-            }
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding(.trailing, Self.edge)
-        .padding(.bottom, Self.edge)
-        .overlay(alignment: .trailing) { rightResizeHandle }
-        .overlay(alignment: .bottom) { bottomResizeHandle }
-        .overlay(alignment: .bottomTrailing) { cornerResizeHandle }
-        .frame(width: size.width, height: size.height)
-        // Re-clamp to the screen every time the popover is shown and whenever the
-        // display setup changes: `saved()` re-reads the user's persisted size and
-        // caps it to what fits now, so shrinking the screen doesn't lose the size.
-        .onAppear { size = PopoverSize.saved() }
-        .onReceive(NotificationCenter.default.publisher(
-            for: NSApplication.didChangeScreenParametersNotification)) { _ in
-            size = PopoverSize.saved()
-        }
+    public var body: some View {
+        sizedContent
         .alert("Nuevo grupo", isPresented: $showNewGroupAlert) {
             TextField("Nombre", text: $newGroupName)
             Button("Cancelar", role: .cancel) { newGroupName = "" }
@@ -146,6 +138,68 @@ struct PopoverRootView: View {
             Text(confirmClearType == .image
                  ? "Se borrarán todas las imágenes que no sean favoritas. Las favoritas se conservan."
                  : "Se borrarán todos los textos que no sean favoritos. Los favoritos se conservan.")
+        }
+    }
+
+    /// The list itself, identical in every host.
+    private var stack: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            if store.viewMode != .groups {
+                searchField
+                Divider()
+                GroupFilterBadges(store: store)
+                Divider()
+            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if store.viewMode == .text {
+                Divider()
+                newPasswordBar
+            }
+        }
+    }
+
+    /// Pie de la pestaña Texto: abre el modal para crear a mano una contraseña.
+    private var newPasswordBar: some View {
+        Button {
+            PasswordCreatorWindowController.show(store: store)
+        } label: {
+            Label("Nueva contraseña", systemImage: "plus")
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .help("Crear una contraseña que no está en el portapapeles")
+    }
+
+    /// The list plus whatever sizing the host implies: our own popover chrome
+    /// when we own the window, otherwise just filling the space we were given.
+    @ViewBuilder
+    private var sizedContent: some View {
+        if ownsWindow {
+            stack
+                .padding(.trailing, Self.edge)
+                .padding(.bottom, Self.edge)
+                .overlay(alignment: .trailing) { rightResizeHandle }
+                .overlay(alignment: .bottom) { bottomResizeHandle }
+                .overlay(alignment: .bottomTrailing) { cornerResizeHandle }
+                .frame(width: size.width, height: size.height)
+                // Re-clamp to the screen every time the popover is shown and whenever the
+                // display setup changes: `saved()` re-reads the user's persisted size and
+                // caps it to what fits now, so shrinking the screen doesn't lose the size.
+                .onAppear { size = PopoverSize.saved() }
+                .onReceive(NotificationCenter.default.publisher(
+                    for: NSApplication.didChangeScreenParametersNotification)) { _ in
+                    size = PopoverSize.saved()
+                }
+        } else {
+            stack
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -243,6 +297,27 @@ struct PopoverRootView: View {
         .padding(10)
     }
 
+    /// Buscador: filtra por contenido, título y nota (ver `matchesSearch`).
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Buscar", text: $store.searchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+            if !store.searchQuery.isEmpty {
+                Button { store.searchQuery = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Limpiar la búsqueda")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
     private func trashButton(_ help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "trash")
@@ -264,60 +339,128 @@ struct PopoverRootView: View {
     }
 
     private var textList: some View {
-        let items = store.items.filter { $0.contentType == .text && store.passesGroupFilter($0) }
-        return ScrollView {
-            LazyVStack(spacing: 2) {
-                if items.isEmpty {
-                    emptyLabel(store.items.contains { $0.contentType == .text } ? "Sin textos visibles (filtrados)" : "Sin textos")
-                }
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    if needsFavoriteDivider(items, index) { favoriteDivider }
-                    ClipboardTextRow(
-                        item: item,
-                        groups: store.groups,
-                        onSelect: { actions.selectItem(item) },
-                        onEditDetail: { actions.editDetail(item) },
-                        onToggleFavorite: { store.toggleFavorite(id: item.id) },
-                        onDelete: { store.remove(id: item.id) },
-                        onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
-                        onNewGroup: { startNewGroup(assignTo: item.id) }
-                    )
-                }
-            }
-            .padding(6)
+        let items = store.items.filter { $0.contentType == .text && store.passes($0) }
+        return splitList(
+            items: items,
+            rowHeight: Self.textRowHeight,
+            emptyText: store.items.contains { $0.contentType == .text } ? "Sin textos visibles (filtrados)" : "Sin textos"
+        ) { item in
+            ClipboardTextRow(
+                item: item,
+                groups: store.groups,
+                onSelect: { paste(item) },
+                onEditDetail: { edit(item) },
+                onToggleFavorite: { store.toggleFavorite(id: item.id) },
+                onDelete: { store.remove(id: item.id) },
+                onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
+                onNewGroup: { startNewGroup(assignTo: item.id) }
+            )
+        }
+    }
+
+    /// Pegar y editar son las dos acciones que **revelan** el contenido, así que
+    /// en un item protegido pasan por la autenticación (con su ventana de
+    /// gracia). Favorito, grupo y borrar no enseñan nada y van directos.
+    private func paste(_ item: ClipboardItem) {
+        ProtectedAccess.run(for: item, reason: "copiar un elemento protegido") {
+            actions.selectItem(item)
+        }
+    }
+
+    private func edit(_ item: ClipboardItem) {
+        ProtectedAccess.run(for: item, reason: "abrir un elemento protegido") {
+            actions.editDetail(item)
         }
     }
 
     private var imageList: some View {
-        let items = store.items.filter { $0.contentType == .image && store.passesGroupFilter($0) }
-        return ScrollView {
-            LazyVStack(spacing: 2) {
-                if items.isEmpty {
-                    emptyLabel(store.items.contains { $0.contentType == .image } ? "Sin imágenes visibles (filtradas)" : "Sin imágenes")
-                }
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    if needsFavoriteDivider(items, index) { favoriteDivider }
-                    ClipboardImageRow(
-                        item: item,
-                        groups: store.groups,
-                        onSelect: { actions.selectItem(item) },
-                        onEditDetail: { actions.editDetail(item) },
-                        onQuickLook: { actions.quickLook(item) },
-                        onToggleFavorite: { store.toggleFavorite(id: item.id) },
-                        onDelete: { store.remove(id: item.id) },
-                        onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
-                        onNewGroup: { startNewGroup(assignTo: item.id) }
-                    )
-                }
-            }
-            .padding(6)
+        let items = store.items.filter { $0.contentType == .image && store.passes($0) }
+        return splitList(
+            items: items,
+            rowHeight: Self.imageRowHeight,
+            emptyText: store.items.contains { $0.contentType == .image } ? "Sin imágenes visibles (filtradas)" : "Sin imágenes"
+        ) { item in
+            ClipboardImageRow(
+                item: item,
+                groups: store.groups,
+                onSelect: { paste(item) },
+                onEditDetail: { edit(item) },
+                onQuickLook: { actions.quickLook(item) },
+                onToggleFavorite: { store.toggleFavorite(id: item.id) },
+                onDelete: { store.remove(id: item.id) },
+                onAssign: { store.assignGroup(itemID: item.id, groupID: $0) },
+                onNewGroup: { startNewGroup(assignTo: item.id) }
+            )
         }
     }
 
-    /// The lists are sorted favourites-first, so the boundary between the two
-    /// blocks is the first non-favourite that follows a favourite.
-    private func needsFavoriteDivider(_ items: [ClipboardItem], _ index: Int) -> Bool {
-        index > 0 && !items[index].isFavorite && items[index - 1].isFavorite
+    // MARK: - Split list (favourites on top, history below)
+
+    /// Favourites are unlimited, so they can't share one scroll with the recent
+    /// items: a few hundred stars would push the history off the bottom. The
+    /// list is split into two independently scrolling panes separated by the
+    /// same heavy rule as before.
+    private static let maxFavoriteRows = 15
+    /// Approximate laid-out row heights (content + vertical padding + the 2pt
+    /// stack spacing). Only used to size the favourites pane, so being a couple
+    /// of points off just means it shows slightly more or less than 15 rows.
+    private static let textRowHeight: CGFloat = 29
+    private static let imageRowHeight: CGFloat = 78
+
+    /// Height of the favourites pane: up to `maxFavoriteRows` rows, but never
+    /// more than half the available height — an image row is ~78pt, so 15 of
+    /// them would be taller than the whole popover and leave the history with
+    /// no room at all.
+    private static func favoritesPaneHeight(count: Int, rowHeight: CGFloat, available: CGFloat) -> CGFloat {
+        let rows = CGFloat(min(count, maxFavoriteRows))
+        return min(rows * rowHeight + 12, max(available * 0.5, rowHeight + 12))
+    }
+
+    @ViewBuilder
+    private func splitList<Row: View>(
+        items: [ClipboardItem],
+        rowHeight: CGFloat,
+        emptyText: String,
+        @ViewBuilder row: @escaping (ClipboardItem) -> Row
+    ) -> some View {
+        let favorites = items.filter { $0.isFavorite }
+        let history = items.filter { !$0.isFavorite }
+        if items.isEmpty {
+            ScrollView {
+                LazyVStack(spacing: 2) { emptyLabel(emptyText) }.padding(6)
+            }
+        } else {
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    if !favorites.isEmpty {
+                        pane(favorites, row: row)
+                            // With no history below, the favourites take it all.
+                            .frame(height: history.isEmpty
+                                   ? geo.size.height
+                                   : Self.favoritesPaneHeight(count: favorites.count,
+                                                              rowHeight: rowHeight,
+                                                              available: geo.size.height))
+                        if !history.isEmpty { favoriteDivider }
+                    }
+                    if !history.isEmpty {
+                        pane(history, row: row)
+                            .frame(maxHeight: .infinity)
+                    }
+                }
+            }
+        }
+    }
+
+    private func pane<Row: View>(
+        _ items: [ClipboardItem],
+        @ViewBuilder row: @escaping (ClipboardItem) -> Row
+    ) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                ForEach(items) { item in row(item) }
+            }
+            .padding(6)
+        }
     }
 
     /// Deliberately heavier than a stock `Divider` (which is 1pt and very faint):
@@ -598,7 +741,9 @@ struct DetailIndicator: View {
         if item.hasDetail {
             Image(systemName: "note.text")
                 .foregroundStyle(.secondary)
-                .help(item.detail ?? "")
+                // La nota de un item protegido no se enseña en el tooltip: el
+                // candado no valdría de nada si el globo de ayuda la cantara.
+                .help(item.isProtected ? "Nota protegida" : (item.detail ?? ""))
         }
     }
 }
@@ -619,11 +764,20 @@ struct ClipboardTextRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(item.textPreview)
+            if item.isProtected {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(.secondary)
+                    .help("Protegido: pide autenticación para copiarlo o abrirlo")
+            }
+            // Nunca `textLine`: en un item protegido esto enseña el título.
+            Text(item.displayLine)
                 .font(.system(size: 13))
+                .italic(item.isProtected)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer(minLength: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // Margen hasta el primer icono; el texto ocupa todo lo demás.
+                .padding(.trailing, 4)
             DetailIndicator(item: item)
             groupMenu
             favoriteButton

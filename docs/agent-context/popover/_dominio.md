@@ -1,9 +1,10 @@
 ---
 dominio: popover
-actualizado: 2026-08-02
+actualizado: 2026-11-12
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/Security/ProtectedAccess.swift
   - src/ClipboardManager/MenuUI/AboutView.swift
   - src/ClipboardManager/MenuUI/AboutWindowController.swift
 depende_de: [historial/_dominio]
@@ -16,12 +17,16 @@ nativo de clic derecho y la ventana About.
 
 ## Entidades
 
-- `StatusItemController` — dueño del status item y del popover; mantiene
-  `focusHistory` y `pasteTarget`.
-- `PopoverActions` — struct de callbacks (`selectItem`, `quickLook`, `editDetail`) que
-  el controlador inyecta en las vistas. **Solo** lo que necesita AppKit pasa por aquí;
-  las mutaciones de datos van directas al store.
-- `PopoverRootView` — picker Texto/Imágenes/Grupos, listas, chips y handles de resize.
+- `StatusItemController` — dueño del status item y del popover; guarda el
+  `pasteTarget` que captura al abrirlo. **Solo app suelta**: no está en el Kit.
+- `PasteTargetTracker` (Kit) — resuelve a qué app hay que pegar y mantiene el
+  historial de activaciones (ver [pegar-item](pegar-item.md)).
+- `PopoverActions` (Kit) — struct de callbacks (`selectItem`, `quickLook`,
+  `editDetail`) que el anfitrión inyecta en las vistas. **Solo** lo que necesita
+  AppKit pasa por aquí; las mutaciones de datos van directas al store.
+- `PopoverRootView` (Kit) — picker Texto/Imágenes/Grupos, listas, chips y handles de
+  resize. Con `ownsWindow: false` no dibuja los handles ni fija tamaño: los pinta
+  solo cuando es dueño de la ventana.
 - `PopoverSize` — tamaño persistido y acotado (ver [redimensionar](redimensionar.md)).
 - Filas: `ClipboardTextRow`, `ClipboardImageRow`, más `DetailIndicator` y el menú 📁.
 
@@ -35,6 +40,18 @@ nativo de clic derecho y la ventana About.
 - `popover.animates = false`: la animación por frame haría que el arrastre de resize
   se sintiera lento.
 - Las filas gestionan su propio cursor (`pointingHand`) y su hover.
+- Entre la cabecera y los chips de grupo hay un **buscador** (`searchField`) atado a
+  `store.searchQuery`: filtra por los tres campos de texto del item (contenido,
+  título y nota) sin acentos ni mayúsculas. No se persiste.
+- Una fila **protegida** enseña `item.displayLine` (el título, en cursiva, con un
+  candado), nunca `textLine`. Pegarla o abrir su editor pasa por `ProtectedAccess`.
+- La pestaña Texto lleva un **pie fijo** «Nueva contraseña» (`newPasswordBar`) que abre
+  el modal de creación (ver [edicion-item](../edicion-item/_dominio.md)).
+- Texto e Imágenes se pintan con `splitList`: **dos paneles con scroll propio**
+  —favoritos arriba, historial (no favoritos) abajo— separados por la regla gruesa
+  `favoriteDivider`. El panel de favoritos mide hasta 15 filas (`maxFavoriteRows`) y
+  nunca más de la mitad del alto disponible; si no hay historial, lo ocupa todo. Un
+  solo scroll no vale: los favoritos son ilimitados y empujarían el historial fuera.
 
 ## Acciones documentadas
 

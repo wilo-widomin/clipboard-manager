@@ -3,7 +3,7 @@ dominio: popover
 accion: redimensionar
 actualizado: 2026-08-02
 archivos:
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
   - src/ClipboardManager/MenuUI/StatusItemController.swift
 ---
 

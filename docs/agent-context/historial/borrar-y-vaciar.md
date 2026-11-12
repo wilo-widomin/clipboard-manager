@@ -3,8 +3,8 @@ dominio: historial
 accion: borrar-y-vaciar
 actualizado: 2026-08-02
 archivos:
-  - src/ClipboardManager/Models/ClipboardStore.swift
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
 ---
 
 # Borrar y vaciar

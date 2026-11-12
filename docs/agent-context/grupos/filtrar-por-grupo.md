@@ -1,10 +1,10 @@
 ---
 dominio: grupos
 accion: filtrar-por-grupo
-actualizado: 2026-08-02
+actualizado: 2026-08-12
 archivos:
-  - src/ClipboardManager/MenuUI/PopoverRootView.swift
-  - src/ClipboardManager/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
 ---
 
 # Filtrar por grupo
@@ -15,7 +15,7 @@ Dos UIs comparten exactamente la misma selección.
 ## Flujo
 
 1. Selección = `isFilterEnabled` de cada grupo + `store.showUngrouped`.
-2. La cambian los chips (`GroupFilterBadges`, `PopoverRootView.swift:378`) o los
+2. La cambian los chips (`GroupFilterBadges`, `PopoverRootView.swift:463`) o los
    checkboxes de la pestaña Grupos → `toggleGroupFilter` / `showUngrouped.toggle()`.
 3. `isGroupFilterActive` decide si hay filtro; `passesGroupFilter(_:)` decide item a
    item. Las listas de Texto e Imágenes lo aplican al construirse.

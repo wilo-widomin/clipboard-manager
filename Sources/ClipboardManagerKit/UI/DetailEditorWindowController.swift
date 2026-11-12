@@ -15,7 +15,7 @@ import SwiftUI
 /// window; the controllers are retained here and released when their window
 /// closes.
 @MainActor
-final class DetailEditorWindowController: NSObject {
+public final class DetailEditorWindowController: NSObject {
 
     /// Retains live controllers so their windows aren't deallocated.
     private static var open: [DetailEditorWindowController] = []
@@ -23,7 +23,7 @@ final class DetailEditorWindowController: NSObject {
     private var window: NSWindow?
 
     /// Opens the editor for `item`, writing changes back through `store`.
-    static func show(item: ClipboardItem, store: ClipboardStore) {
+    public static func show(item: ClipboardItem, store: ClipboardStore) {
         let controller = DetailEditorWindowController()
         open.append(controller)
         controller.present(item: item, store: store)
@@ -58,7 +58,9 @@ final class DetailEditorWindowController: NSObject {
 }
 
 extension DetailEditorWindowController: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
+    /// `public` because the class is public and `NSWindowDelegate` is a public
+    /// protocol: a witness can't be less visible than the conformance.
+    public func windowWillClose(_ notification: Notification) {
         window = nil
         DetailEditorWindowController.open.removeAll { $0 === self }
     }
@@ -78,6 +80,11 @@ struct DetailEditorView: View {
 
     @State private var content: String
     @State private var note: String
+    @State private var title: String
+    @State private var isProtected: Bool
+    /// Un item protegido enseña su texto como contraseña; el ojo lo destapa
+    /// mientras dura la edición (para llegar aquí ya se ha autenticado).
+    @State private var isRevealed = false
 
     init(itemID: ClipboardItem.ID, isText: Bool, store: ClipboardStore, onClose: @escaping () -> Void) {
         self.itemID = itemID
@@ -88,18 +95,29 @@ struct DetailEditorView: View {
         let item = store.items.first(where: { $0.id == itemID })
         self._content = State(initialValue: item?.textContent ?? "")
         self._note = State(initialValue: item?.detail ?? "")
+        self._title = State(initialValue: item?.title ?? "")
+        self._isProtected = State(initialValue: item?.isProtected ?? false)
     }
 
     /// Blanking a text item would leave a ghost row, so Guardar is blocked
-    /// instead (`setTextContent` rejects it too).
+    /// instead (`setTextContent` rejects it too). Y un item protegido sin
+    /// título dejaría la fila sin nada que enseñar, así que el título pasa a
+    /// ser obligatorio en cuanto se activa el interruptor.
     private var canSave: Bool {
-        !isText || !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isText && content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        if isProtected && title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        return true
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if isText {
-                section("Texto copiado", text: $content, minHeight: 180)
+                protectionControls
+                if isProtected {
+                    protectedContentSection
+                } else {
+                    section("Texto copiado", text: $content, minHeight: 180)
+                }
             } else {
                 Text("Imagen")
                     .font(.headline)
@@ -121,6 +139,61 @@ struct DetailEditorView: View {
                minHeight: isText ? 400 : 240, maxHeight: .infinity)
     }
 
+    /// Interruptor de protección y título. El título es lo que la lista enseña
+    /// en lugar del texto capturado, así que solo tiene sentido con el
+    /// interruptor puesto — pero se conserva al apagarlo.
+    @ViewBuilder
+    private var protectionControls: some View {
+        Toggle("Protegido", isOn: $isProtected)
+            .toggleStyle(.switch)
+            .help("Oculta el texto en la lista y pide autenticación para copiarlo o abrirlo")
+        if isProtected {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Título")
+                    .font(.headline)
+                TextField("Lo que se verá en la lista", text: $title)
+                    .textFieldStyle(.roundedBorder)
+            }
+        }
+    }
+
+    /// El texto capturado de un item protegido: oculto como contraseña, y
+    /// destapado con el ojo. Empieza siempre tapado aunque ya estemos
+    /// autenticados —abrir la ventana no debería enseñarlo a quien pase por
+    /// detrás—, y el ojo lo alterna en los dos sentidos.
+    @ViewBuilder
+    private var protectedContentSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Texto copiado")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    isRevealed.toggle()
+                } label: {
+                    Image(systemName: isRevealed ? "eye.slash" : "eye")
+                }
+                .buttonStyle(.borderless)
+                .help(isRevealed ? "Ocultar el texto" : "Mostrar el texto")
+            }
+            if isRevealed {
+                TextEditor(text: $content)
+                    .font(.system(size: 13))
+                    .frame(minHeight: 180, maxHeight: .infinity)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+            } else {
+                // `SecureField` es de una línea: mientras está tapado no se
+                // edita cómodamente, y para eso está el ojo.
+                SecureField("", text: $content)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13))
+            }
+        }
+    }
+
     private func section(_ title: String, text: Binding<String>, minHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -137,7 +210,10 @@ struct DetailEditorView: View {
 
     private func save() {
         guard canSave else { return }
-        if isText { store.setTextContent(id: itemID, text: content) }
+        if isText {
+            store.setTextContent(id: itemID, text: content)
+            store.setProtection(id: itemID, isProtected: isProtected, title: title)
+        }
         store.setDetail(id: itemID, detail: note)
         onClose()
     }

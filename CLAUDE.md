@@ -26,12 +26,15 @@ macOS menubar app for clipboard history — text & images, favorites, groups.
 
 ## Project structure
 
+Everything reusable lives in the **ClipboardManagerKit** Swift Package; the app is a
+thin shell around it. There is exactly **one copy of each file** — the standalone app
+target compiles `Sources/ClipboardManagerKit/` directly (a second
+`fileSystemSynchronizedGroup`), and Widomin consumes the same directory as an SPM
+dependency. Never copy a file into `src/` to "adapt" it.
+
 ```
-src/ClipboardManager/
-├── App/
-│   ├── AppDelegate.swift     — @main entry, LSUIElement, tick timer
-│   ├── AppInfo.swift         — name, version, author credit (widomin.com)
-│   └── Info.plist
+Package.swift                  — product ClipboardManagerKit, macOS 13+
+Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 ├── Models/
 │   ├── ClipboardItem.swift    — item model (text/image, favorite, date, groupID)
 │   ├── ClipboardGroup.swift   — group model (id, name, isFilterEnabled)
@@ -40,17 +43,47 @@ src/ClipboardManager/
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
 │   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
+├── Security/
+│   ├── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min)
+│   └── PasswordGenerator.swift — generador de contraseñas (largo, tipos, símbolos extra)
+└── UI/
+    ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
+    ├── PopoverActions.swift          — the seam: what each host injects
+    ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
+    ├── DetailEditorWindowController.swift — item editor window + RightClickCatcher
+    └── PasswordCreatorWindowController.swift — modal «Nueva contraseña» (item manual + generador)
+
+src/ClipboardManager/          — STANDALONE APP ONLY
+├── App/
+│   ├── AppDelegate.swift     — @main entry, LSUIElement, tick timer
+│   ├── AppInfo.swift         — name, version, author credit (widomin.com)
+│   ├── EditMenu.swift        — menú principal invisible: sin él no hay Cmd+C/V en los campos
+│   └── Info.plist
 ├── MenuUI/
 │   ├── StatusItemController.swift    — NSStatusItem + NSPopover lifecycle, focus/paste
-│   ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
-│   ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
-│   ├── DetailEditorWindowController.swift — item editor window (texto + detalle) + RightClickCatcher
-│   ├── AboutView.swift / AboutWindowController.swift
+│   └── AboutView.swift / AboutWindowController.swift
 └── Resources/
-    └── (icons will go here)
+    └── Assets.xcassets
 ```
 
+**What goes where:** if a second host would need it, it belongs in the Kit. What stays
+in the app is only what makes sense when *this* app owns the menu bar — the status
+item, stealing and restoring focus to paste, its own About window and version string.
+
+`PopoverRootView(store:actions:ownsWindow:)` is the entry point. `ownsWindow` defaults
+to `true`: the standalone app hosts the view in its own `NSPopover`, so the view sets
+its size and draws the resize handles. A host that already owns the window (Widomin)
+passes `false` and the view just fills the space it is given.
+
+The Texto/Imágenes lists are **split in two independently scrolling panes** (`splitList`):
+favourites on top, non-favourite history below, separated by the same heavy
+`favoriteDivider`. The favourites pane is sized to at most `maxFavoriteRows` (15) rows
+and never more than half the available height (an image row is ~78pt, so 15 would leave
+the history no room); with no history below it takes the whole area. One shared scroll
+is not an option — favourites are unlimited and would push the history off the bottom.
+
 `PopoverRootView` holds the SwiftUI views: a segmented Texto/Imágenes/Grupos picker,
+a search box (filters by text, title and note),
 `ClipboardTextRow` / `ClipboardImageRow` (each with a 📁 `Menu` for group assignment,
 ⭐ favourite, 🗑 delete, and 👁 Quick Look on images), and `GroupsManageView` /
 `GroupManageRow` (checkbox filter + inline rename + delete). It also owns the resize
@@ -62,9 +95,9 @@ live in the status-item right-click menu).
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
-- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally; `cap` evicts the oldest **non-favourite** of that type, so favourites can push a type past its limit (and dropping an image deletes its PNG). `visibleItems` filtered by `viewMode` **and** the per-group checkbox filter (applies to **all** items — see Groups).
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note).
 
 ## Groups
 
@@ -116,10 +149,21 @@ live in the status-item right-click menu).
   with the note text as tooltip.
 - Opening the editor goes through the controller (`PopoverActions.editDetail`), like
   paste/Quick Look; the save is a plain data mutation straight to the store.
-- There is **no authentication gate**: it was dropped (an earlier version used
-  `LocalAuthentication`) because the note is stored in clear text in `store.json`
-  anyway, so the prompt bought no real protection — only friction. Don't reintroduce
-  it without also encrypting the note.
+- **Protected items** (text only): the editor has a `Protegido` switch plus a
+  `title`. When protected the list shows the title (italic, with a lock) instead of
+  the captured text, and both revealing actions — pasting the item and opening the
+  editor — go through `ProtectedAccess` (`deviceOwnerAuthentication`: Touch ID or the
+  macOS user password) with a **15-minute in-memory grace window**. Inside the editor
+  the captured text is a `SecureField`, toggled to a plain editor by the eye button.
+- The gate **hides, it does not encrypt**: the text still lives in clear in
+  `store.json`. Encrypting it at rest is the next step (`docs/05-blueprint-sync-android.md`).
+
+## Contraseñas creadas a mano
+
+- El pie «Nueva contraseña» de la pestaña Texto abre un modal (ventana propia) con
+  título, contraseña, generador, detalle, grupo y `Protegida` (activada por defecto).
+- Guarda con `ClipboardStore.addManual`: un item de texto normal, **favorito** (para
+  esquivar el tope) y sin deduplicar. No hay tipo aparte.
 
 ## Code Standards
 
