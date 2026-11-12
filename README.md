@@ -62,6 +62,16 @@ clipboard-manager/
   puedes **reescribir el texto copiado** y añadirle una **nota de detalle** (en las
   imágenes solo la nota). Las filas con nota muestran un icono 📝 con la nota como
   tooltip. Todo se guarda en claro en `store.json`, así que no lo uses para secretos
+- ✅ Buscador sobre las listas: filtra por el texto, el título y la nota, sin distinguir
+  mayúsculas ni acentos. No se guarda entre arranques
+- ✅ Items protegidos (solo texto): en la lista se ve un título con un candado en lugar
+  del contenido, y para pegarlos o abrir su editor pide Touch ID o la contraseña del
+  Mac (sin volver a preguntar durante 15 minutos). Oculta el contenido a quien mire la
+  pantalla, **pero no lo cifra**: el texto sigue en claro en `store.json`
+- ✅ Contraseñas creadas a mano: el botón «+ Nueva contraseña» al pie de la pestaña
+  Texto abre un modal con título, contraseña, detalle, grupo y «Protegida». Incluye un
+  generador (largo de 8 a 64, mayúsculas, minúsculas, números, símbolos y símbolos
+  extra, que se recuerdan). Se guarda como favorito, así que el límite no la borra
 - ✅ UI en un popover SwiftUI con pestañas Texto / Imágenes / Grupos
 - ✅ Popover redimensionable (arrastra el borde derecho, inferior o la esquina); el
   tamaño se recuerda
