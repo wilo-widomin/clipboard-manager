@@ -1,6 +1,6 @@
 ---
 dominio: historial
-actualizado: 2026-08-21
+actualizado: 2026-11-12
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -41,6 +41,11 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - Des-favoritar limpia `groupID` (pertenecer a un grupo implica ser favorito).
 - Cada mutación pública persiste; `purge` es la excepción privada (no persiste, lo
   hace quien la llama).
+
+- Hay **dos entradas** de items: `add` (lo captura el monitor; deduplica) y `addManual`
+  (el modal «Nueva contraseña»; ver [edicion-item](../edicion-item/_dominio.md)). Este
+  último nace favorito, protegido si se pide, **no deduplica** y rechaza texto en
+  blanco o protegido sin título.
 
 ## Acciones documentadas
 

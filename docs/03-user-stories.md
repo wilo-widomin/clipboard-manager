@@ -28,6 +28,7 @@
 | US-15 | Como usuario, quiero llegar a todos los chips aunque no quepan | Cuando la tira desborda aparecen flechas ‹ / › que la desplazan; cada flecha se oculta al agotarse ese lado y ambas desaparecen si todos los chips caben |
 | US-16 | Como usuario, quiero anotar un item con información extra | Clic derecho en la fila abre un editor en su propia ventana con un área para la nota. Las filas con nota muestran un indicador con la nota como tooltip. Guardar una nota vacía la borra. La nota se guarda en claro, no es para secretos |
 | US-17 | Como usuario, quiero corregir el texto que copié | El mismo editor incluye, para los items de texto, un área multilínea con el contenido capturado. Al guardar, la lista y el pegado usan el texto nuevo; la fecha y la posición no cambian. Dejarlo vacío no se permite (Guardar deshabilitado). En imágenes esa área no aparece |
+| US-22 | Como usuario, quiero crear una contraseña que no está en el portapapeles para reutilizarla | El pie «+ Nueva contraseña» de la pestaña Texto abre un modal con título, contraseña (tapada, con ojo), detalle, grupo y «Protegida» (activada por defecto). El generador permite elegir largo (8–64), mayúsculas, minúsculas, números, símbolos y símbolos extra, que se recuerdan entre usos. Cada tipo activo aparece al menos una vez. El item nace favorito (no lo borra el tope de 50) y no se mezcla con otro igual |
 
 ### Could Have
 
