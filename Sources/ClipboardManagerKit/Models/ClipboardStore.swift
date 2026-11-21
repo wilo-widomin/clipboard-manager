@@ -136,6 +136,7 @@ public final class ClipboardStore: ObservableObject {
     }
 
     private let persistence: PersistenceService
+    private let textSealer: ((String) -> String?)?
 
     /// `false` hasta que `load()` o `adoptInitialState` han puesto en memoria
     /// lo que había en disco. Mientras tanto no se persiste nada: guardar la
@@ -161,8 +162,16 @@ public final class ClipboardStore: ObservableObject {
 
     /// `deviceId` solo hace falta para pruebas o para un anfitrión que quiera
     /// fijarlo; por defecto se usa el de `DeviceIdentity`.
-    public init(persistence: PersistenceService, deviceId: String? = nil) {
+    ///
+    /// `textSealer` solo existe para las pruebas: sustituye al cifrado con la
+    /// `protectedKey` para no tocar el Llavero. La app nunca lo pasa.
+    public init(
+        persistence: PersistenceService,
+        deviceId: String? = nil,
+        textSealer: ((String) -> String?)? = nil
+    ) {
         self.persistence = persistence
+        self.textSealer = textSealer
         self.resolvedDeviceId = deviceId
         // Restore persisted view mode preference.
         if let raw = UserDefaults.standard.string(forKey: "viewMode"),
@@ -239,6 +248,7 @@ public final class ClipboardStore: ObservableObject {
     /// Cifra el texto de un item protegido. `nil` si no hay llave: quien llama
     /// no debe guardar nada en ese caso.
     private func sealProtectedText(_ text: String) -> String? {
+        if let textSealer { return textSealer(text) }
         guard let publicKey = protectedPublicKey(sealedTextExists: items.contains { $0.sealedText != nil }) else {
             return nil
         }
@@ -476,6 +486,9 @@ public final class ClipboardStore: ObservableObject {
     /// cifra con la `protectedKey` y no queda en claro ni en memoria; sin él se
     /// guarda en claro y se descarta el cifrado.
     ///
+    /// Si el item pasa de no protegido a protegido, además se hace favorito
+    /// (con su marca); desproteger no le quita la estrella.
+    ///
     /// Devuelve `false` sin tocar nada si el texto está en blanco, si se
     /// protege sin título o si no hay llave para cifrar: nunca se guarda en
     /// claro un texto que se pidió proteger.
@@ -508,9 +521,17 @@ public final class ClipboardStore: ObservableObject {
         items[idx].title = newTitle
 
         let stamp = newStamp()
+        // Proteger un item que no lo estaba lo hace favorito: solo los
+        // favoritos escapan al tope del historial, y una contraseña protegida
+        // no debe perderse con él. Desproteger no quita la estrella.
+        if isProtected && protectionChanged && !items[idx].isFavorite {
+            items[idx].isFavorite = true
+            items[idx].stamps.favorite = stamp
+        }
         if contentChanged || protectionChanged { items[idx].stamps.content = stamp }
         if protectionChanged { items[idx].stamps.protection = stamp }
         if titleChanged { items[idx].stamps.title = stamp }
+        items = sort(items)
         persist()
         return true
     }
