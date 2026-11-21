@@ -24,4 +24,4 @@ pasa a «Hecho» en el mismo cambio.
 - **Arreglos de seguridad del Mac** (21-11-2026): historial, grupos e imágenes cifrados;
   contraseñas protegidas con su propia llave; lo copiado desde un gestor de contraseñas
   no se guarda. Con la versión 1.10.2 Willy ve sus datos bien; faltan las pruebas
-  de la lista que se le pasó (de la 3 a la 9).
+  de `prueba-seguridad-mac.md` (de la 3 a la 9).
