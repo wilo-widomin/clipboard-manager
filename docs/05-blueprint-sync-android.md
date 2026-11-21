@@ -1,178 +1,285 @@
-# Blueprint — App Android hermana y sincronización cifrada
+# Blueprint — Sincronización cifrada entre Mac, Android y Linux
 
-> Estado: **diseño**, nada implementado. Decisiones cerradas el 21-08-2026.
-> Orden acordado: **la app Android va primero**; el cifrado en reposo de macOS
-> puede llegar después, pero **siempre antes del sync**.
-> Los identificadores van en inglés porque acabarán siendo código; la prosa, en español.
+> Estado: **diseño**, nada implementado. Primera versión cerrada el 21-08-2026;
+> **revisada entera con Willy el 17-11-2026**, pensando solo en la seguridad.
+> Los identificadores van en inglés porque acabarán siendo código; la prosa, en castellano.
 
-## 1. Qué se construye (fase 1)
-
-Tres piezas:
+## 1. Qué se construye
 
 | Pieza | Repo | Qué es |
 |---|---|---|
-| **Modelo sincronizable** | este repo | `ClipboardManagerKit` deja de guardar una foto y pasa a guardar estado con historia suficiente para fusionar dos dispositivos |
-| **`clipboard-sync-server`** | repo nuevo | servicio propio en la red de casa; almacén tonto de registros cifrados |
-| **`clipboard-manager-android`** | repo nuevo | app Kotlin/Compose con la misma lista, sin captura automática |
+| **Arreglos de seguridad en macOS** | este repo | archivo local cifrado entero, contraseñas que se respetan como secreto, Touch ID que abre la llave de verdad |
+| **Modelo sincronizable** | este repo | `ClipboardManagerKit` deja de guardar una foto y pasa a guardar estado con historia suficiente para fusionar aparatos |
+| **`clipboard-sync-server`** | repo nuevo | buzón en el Ubuntu de casa; guarda registros cifrados que no puede leer |
+| **`clipboard-manager-android`** | repo existente (solo esqueleto) | app Kotlin/Compose con la misma lista, sin captura automática |
+| **`clipboard-manager-linux`** | repo nuevo | app de escritorio para el Ubuntu, en Rust |
 
-**Fuera de alcance en fase 1:** captura automática del portapapeles en Android
-(el sistema no la permite fuera de un IME), teclado propio, burbuja flotante,
-compartir con terceras personas, publicación en Play Store.
+**Fuera de alcance:**
+- **App de terminal.** Se descartó el 17-11-2026. Donde se usaría por SSH es la máquina
+  virtual en la que trabajan los agentes, y ahí los agentes tienen permiso de
+  administrador sin contraseña (`sudo` y el grupo `docker`): podrían cambiar la app por
+  una falsa o leer su memoria mientras está abierta. Además, lo que una contraseña
+  imprime dentro de una sesión con un agente entra en la conversación.
+- Captura automática del portapapeles en Android (el sistema no la permite fuera de un
+  teclado propio), teclado propio, burbuja flotante.
+- Compartir con otras personas, multiusuario, Play Store.
+- Sincronizar desde fuera de casa (túnel privado): se verá más adelante, ver §8.
 
-## 2. La app Android, en tres verbos
+## 2. Qué se sincroniza
 
-- **`createItem`** — el usuario escribe un texto o elige una imagen de la galería, con
-  favorito, grupo y nota. Es el editor que ya existe en macOS, sin clic derecho.
-- **`copyToClipboard`** — un toque en la fila escribe el ítem en el portapapeles del
-  sistema. Escribir sí está permitido con la app en primer plano, que es el caso.
-  Android 13+ muestra su propio aviso de copiado: no añadimos otro.
-- **`sync`** — contra el servicio propio.
+**Solo los favoritos, más los grupos enteros.** El historial no favorito es ruido fuera
+del Mac y se recicla solo por los topes. Consecuencia que la interfaz tiene que dejar
+clara: **quitarle la estrella a un item lo saca del conjunto sincronizado** y desaparece
+de los demás aparatos (queda en el que lo tenga hasta que su tope lo recicle).
 
-**Móvil y tablet a la vez.** Son dos aparatos de pleno derecho, no un aparato y su
-espejo: el emparejamiento tiene que valer para N y la interfaz necesita layout
-adaptativo — en tablet, lista y detalle a la vez; en móvil, uno u otro.
+`isFilterEnabled` **no se sincroniza**: es estado de sesión y ni siquiera persiste.
 
-**Desbloqueo**: `BiometricPrompt` con huella, y patrón/PIN del aparato como
-alternativa (`DEVICE_CREDENTIAL`). Es el equivalente exacto del
-`deviceOwnerAuthentication` de macOS, con la misma ventana de gracia de 15 minutos.
+## 3. Arreglos de seguridad en macOS (van primero)
 
-El resto de la interfaz es la de macOS: pestañas Texto / Imágenes / Grupos, favoritos
-arriba con su separador, chips de filtro por grupo, nota por ítem.
+Son fallos de hoy, no de la sincronización. Se hacen antes que todo lo demás.
 
-**Sin topes por tipo en Android.** Los topes (50 textos / 20 imágenes) existen porque
-en macOS la lista se llena sola; aquí cada ítem es deliberado. Un ítem creado a mano
-nace `isFavorite = true`, igual que hoy hace la asignación de grupo.
+### 3.1 Archivo local cifrado entero
 
-## 3. Lo que hay que cambiar en este repo
+Hoy `store.json`, `groups.json` y los PNG están en claro en `~/Library/Application
+Support/ClipboardManager/`. El historial recoge todo lo que se copia, también
+contraseñas copiadas desde otros sitios, y eso acaba en el disco y en Time Machine.
 
-`store.json` guarda **el estado final**, sin historia. Dos dispositivos que escriben
-sobre una foto pierden datos siempre: gana el último que sube y lo demás desaparece,
-y lo borrado en un sitio resucita desde el otro. Antes de cualquier red hace falta:
+- **Se cifra todo**: `store.json`, `groups.json` y cada imagen. El borrador anterior
+  cifraba solo los items protegidos con el argumento de que cifrar todo encarecía el
+  arranque; con este volumen cuesta milisegundos.
+- **AES-256-GCM** con CryptoKit, nonce aleatorio por escritura.
+- **`localKey`**: 32 bytes aleatorios por aparato, en el Keychain con
+  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`. No es la llave del sync: nunca sale
+  del aparato. La app la lee al arrancar sin pedir nada, porque tiene que poder
+  guardar lo que se copia.
+- **Se cifra en el borde de la persistencia** (`JSONPersistenceService`). En memoria
+  todo sigue en claro: buscador, filas y editor no se enteran.
+- **El formato sigue siendo JSON.** Lo que protege es el cifrado, no el formato. Una
+  base de datos solo haría falta si dos programas abrieran el mismo archivo a la vez, y
+  no es el caso.
+- **Migración** del `store.json` en claro que ya existe: copia previa, cifrado, y
+  borrado del archivo en claro solo cuando el cifrado se ha leído bien.
 
-- **`updatedAt` por campo mutable**, no por ítem: `content`, `detail`, `isFavorite`,
-  `groupID`. Un ítem al que marco favorito en el móvil mientras edito su nota en el
-  Mac debe conservar las dos cosas.
-- **Marca de origen**: cada cambio lleva `(updatedAt, deviceId)`. `deviceId` es el
-  desempate cuando dos relojes coinciden, y hace la fusión determinista.
-- **Tombstones**: borrar pone `deletedAt` y conserva el registro. Sin esto, borrar en
-  el móvil es un no-cambio que el Mac deshace en el siguiente sync.
-- **Imágenes por contenido**: `imageFilename` (nombre local) → `imageHash`
-  (SHA-256 del PNG). El registro del ítem viaja siempre; los bytes, aparte y bajo
-  demanda. Dos dispositivos con la misma imagen la almacenan una vez.
-- **Cursor por dispositivo**: hasta qué `seq` del servidor tengo ya integrado.
+Esto protege el archivo —copias de seguridad, alguien que se lleve el disco—, **no** a
+alguien sentado delante del Mac desbloqueado con la app abierta.
 
-`ClipboardStore` sigue siendo la fuente de verdad; lo que cambia es que sus mutaciones
-además **anotan** el cambio. Los grupos necesitan lo mismo (`name`, `deletedAt`);
-`isFilterEnabled` **no se sincroniza** — es estado de sesión y hoy ni siquiera persiste.
+### 3.2 Touch ID abre la llave, no solo la pantalla
 
-## 4. Qué se sincroniza
+Hoy `ProtectedAccess` es un control de la app: el texto protegido está disponible y es
+la app la que decide no enseñarlo hasta que se pone el dedo. Quien llegue a los datos
+por otro camino no pasa por ese control.
 
-**Solo los favoritos.** El historial no favorito es ruido en el móvil y se recicla
-solo por los topes. Consecuencia que hay que respetar en la interfaz: **quitarle la
-estrella a un item lo saca del conjunto sincronizado**, así que desaparece de los
-demás aparatos (queda en el que lo tenga localmente hasta que su tope lo recicle).
-Los grupos sí viajan enteros: son pocos y dan sentido a los favoritos.
+- El texto de los items protegidos se cifra **otra vez** con una segunda llave,
+  **`protectedKey`**, guardada en el Keychain con `SecAccessControl` de presencia del
+  usuario (`.userPresence`: Touch ID o contraseña del Mac). El sistema solo la entrega
+  tras autenticar.
+- La **ventana de gracia de 15 minutos** se mantiene: la llave descifrada vive en
+  memoria ese tiempo y luego se olvida.
+- Willy no nota ningún cambio: pide copiar o editar, pone el dedo y funciona igual que
+  ahora.
 
-## 5. Claves y cifrado
+### 3.3 Contraseñas copiadas: respetar la marca de secreto
 
-**No hay contraseña maestra que recordar.** Un borrador anterior de este documento
-derivaba la clave de una contraseña inventada para la app; sobra, y confundía dos
-cosas distintas:
+Comprobado en el código el 17-11-2026: `ClipboardMonitor.readPasteboard`
+(`ClipboardMonitor.swift`) guarda cualquier texto copiado sin mirar de dónde viene, y
+`PasteboardHelper.copyAndPaste` (`PasteboardHelper.swift`) deja el texto pegado en el
+portapapeles para siempre.
 
-- **Desbloquear la app** usa la credencial del propio aparato — Touch ID / contraseña
-  del Mac, huella / patrón en Android. No es una contraseña de la app, no la
-  guardamos y no hay nada que recuperar. Es lo que ya hace `ProtectedAccess`.
-- **Cifrar lo que viaja** necesita una clave compartida entre aparatos, y el sistema
-  operativo no entrega la contraseña de inicio de sesión para derivarla.
+- **No guardar lo marcado como secreto.** Los gestores de contraseñas (el de Apple,
+  1Password, Bitwarden…) marcan lo que copian con los tipos de la convención
+  nspasteboard.org: `org.nspasteboard.ConcealedType`, `org.nspasteboard.TransientType`
+  y `org.nspasteboard.AutoGeneratedType`. Si aparece alguno, el monitor no lo añade.
+- **Marcar lo que pegamos.** Al pegar un item protegido se escribe también
+  `org.nspasteboard.ConcealedType` y se prepara con `.currentHostOnly`, para que no
+  salte al iPhone o al iPad por el portapapeles compartido de Apple.
+- **Borrar a los 30 segundos**, solo si el `changeCount` sigue siendo el nuestro: si
+  Willy ha copiado otra cosa en medio, no se toca.
+- Hueco que no se puede cerrar: lo copiado desde un sitio que no lo marca (un texto en
+  una web o un correo) se guarda como cualquier texto. Ahí protege el §3.1.
 
-Por eso: `masterKey` (32 bytes) es **aleatoria**, generada una vez en el Mac al
-activar el sync. De ella salen por HKDF `recordKey` (cifra registros), `blobKey`
-(cifra imágenes) y `blobIdKey`.
-- Cifrado **AES-256-GCM** con nonce aleatorio por registro — nativo en las dos
-  plataformas (CryptoKit / JCA), sin dependencias exóticas.
-- **macOS**: `masterKey` en el Keychain. **Android**: envuelta en el Keystore, con
-  `BiometricPrompt` para el desbloqueo diario y la base local en SQLCipher.
-- **Emparejar otro aparato** es un QR que transporta la `masterKey` y su token del
-  servidor. Vale para N aparatos (móvil y tablet son dos emparejamientos).
-- **Recuperación opcional**: exportar una vez la `masterKey` como QR/archivo y
-  guardarlo donde guardes tus copias. Si se pierden **todos** los aparatos a la vez,
-  lo del servidor es ilegible por diseño; esa exportación es la única red.
-- El identificador de una imagen ante el servidor es `HMAC(blobIdKey, sha256(png))`,
-  no el hash a secas: el servidor no puede comprobar si tengo una imagen concreta.
+## 4. La app Android
 
-**El servidor nunca ve la contraseña ni el contenido.** Ve metadatos mínimos:
-`entityId`, `seq`, `updatedAt`, `deviceId`, tamaño.
+- **`createItem`** — escribir un texto o elegir una imagen de la galería, con favorito,
+  grupo y nota. Un item creado a mano nace `isFavorite = true`.
+- **`copyToClipboard`** — un toque en la fila lo escribe en el portapapeles. Si es
+  protegido, con `ClipDescription.EXTRA_IS_SENSITIVE` y borrado a los 30 segundos.
+- **`sync`** — contra el servidor de casa.
+- **Móvil y tablet** son dos aparatos de pleno derecho: interfaz adaptativa (en tablet,
+  lista y detalle a la vez).
+- **Desbloqueo** con `BiometricPrompt`: huella, y patrón/PIN como alternativa
+  (`DEVICE_CREDENTIAL`). Ventana de gracia de 15 minutos.
+- **Nace cifrada**, con la misma forma que el §3: `localKey` en el Keystore (StrongBox
+  si el aparato lo tiene) cifra la base entera; `protectedKey` en el Keystore con
+  `setUserAuthenticationRequired` cifra además el texto protegido.
+- Sin topes por tipo: aquí cada item es deliberado.
+- El resto de la interfaz es la de macOS: pestañas Texto / Imágenes / Grupos, favoritos
+  arriba con su separador, chips de filtro por grupo, nota por item.
 
-### Cifrado en reposo (local)
+## 5. La app de Linux
 
-La misma forma en los dos lados, decidida ya para que Android **nazca cifrado** y no
-haya que migrarlo luego:
+- **Rust**, con **Tauri** para la ventana. Instalada en el **Ubuntu de verdad, nunca en
+  la máquina virtual de los agentes**.
+- Solo crea items, los copia al portapapeles y sincroniza, como Android. No captura el
+  portapapeles.
+- Guarda igual que el Mac: un archivo cifrado. `localKey` en el llavero del escritorio
+  (Secret Service / GNOME Keyring).
+- La lógica común (cifrado, fusión, sincronización) va en una librería Rust aparte
+  dentro del mismo repo, para que la app sea solo la interfaz.
 
-- **AES-256-GCM**, clave **por aparato** guardada en el Keychain (macOS) / Keystore
-  (Android). No es la `masterKey` del sync: lo local nunca sale del aparato.
-- Se cifra **el texto de los items protegidos**, no el historial entero: cifrar todo
-  encarece cada arranque sin proteger nada que no esté ya a la vista en la lista.
-- **Se cifra en el borde de la persistencia.** En memoria todo sigue en claro, así
-  que buscador, filas y editor no se enteran. Eso protege el archivo —copias de
-  seguridad, Time Machine, alguien que se lleve el disco—, **no** a alguien sentado
-  delante del aparato desbloqueado con la app abierta.
-- En macOS hay **migración** del `store.json` en claro que ya existe, con copia previa.
-  En Android no hay ninguna si se hace desde el principio.
+## 6. Lo que cambia en el modelo (este repo)
 
-## 6. Contrato del servidor
+`store.json` guarda **el estado final**, sin historia. Dos aparatos que escriben sobre
+una foto pierden datos: gana el último que sube, y lo borrado en un sitio resucita
+desde otro. Antes de cualquier red hace falta:
 
-Un almacén tonto y **append-only**. No fusiona: no puede, solo tiene ciphertext.
-La fusión es siempre del cliente.
+- **`updatedAt` por campo mutable**, no por item: `content`, `detail`, `title`,
+  `isFavorite`, `isProtected`, `groupID`. Marcar favorito en el móvil mientras se edita
+  la nota en el Mac conserva las dos cosas.
+- **Marca de origen**: cada cambio lleva `(updatedAt, deviceId)`. `deviceId` desempata
+  cuando dos relojes coinciden y hace la fusión determinista.
+- **Tombstones**: borrar pone `deletedAt` y conserva el registro.
+- **Imágenes por contenido**: `imageFilename` → `imageHash` (SHA-256 del PNG). El
+  registro viaja siempre; los bytes, aparte y bajo demanda.
+- **Cursor por aparato**: hasta qué `seq` del servidor tiene ya integrado.
+
+Los grupos necesitan lo mismo (`name`, `deletedAt`). `ClipboardStore` sigue siendo la
+fuente de verdad; sus mutaciones además **anotan** el cambio.
+
+**Fusión en el cliente:** por cada campo gana el `(updatedAt, deviceId)` mayor;
+`deletedAt` gana a cualquier edición. Es last-write-wins por campo, no un CRDT: el único
+conflicto real —editar la misma nota en dos sitios a la vez— es rarísimo y perder la
+versión más vieja es aceptable.
+
+## 7. Llaves y cifrado del sync
+
+**No hay contraseña maestra que recordar.** Desbloquear la app es siempre la
+credencial del aparato (Touch ID, huella, patrón, contraseña del sistema).
+
+### 7.1 La llave compartida
+
+- **`masterKey`** (32 bytes) es aleatoria, se genera una vez en el primer aparato al
+  activar el sync y se guarda como la `localKey` de cada plataforma. De ella salen por
+  HKDF `recordKey` (registros), `blobKey` (imágenes) y `blobIdKey`.
+- **AES-256-GCM**, nonce aleatorio por registro. Nativo en las tres plataformas
+  (CryptoKit, JCA, crates de RustCrypto auditados).
+- **Cada registro va sellado a su sitio.** El cifrado lleva como dato asociado
+  (AAD) `entityType`, `entityId` y la versión del formato. Si el servidor —estropeado o
+  manipulado— mueve un registro cifrado de un item a otro, el descifrado falla y el
+  cliente lo rechaza.
+- El identificador de una imagen ante el servidor es `HMAC(blobIdKey, sha256(png))`:
+  el servidor no puede comprobar si tengo una imagen concreta.
+- **La `masterKey` nunca aparece en pantalla.** Ni en un QR ni en un código.
+
+### 7.2 Emparejar un aparato nuevo
+
+El borrador anterior mostraba la `masterKey` en un QR: una foto de la pantalla bastaba
+para robarla. Ahora se hace como Signal o 1Password:
+
+1. El aparato nuevo genera un par de llaves X25519 y deja su parte pública en el
+   servidor, en un buzón de emparejamiento que caduca en pocos minutos.
+2. Un aparato ya emparejado la recoge, cifra la `masterKey` hacia ella y la devuelve
+   por el mismo buzón, junto con el token de servidor del aparato nuevo.
+3. Los dos aparatos enseñan un **número de seis cifras** calculado a partir de las dos
+   llaves públicas. Willy comprueba que es el mismo y confirma en el aparato viejo. Si
+   alguien se hubiera metido en medio, los números no coincidirían.
+
+Vale para N aparatos: móvil, tablet, Mac y Ubuntu son emparejamientos independientes.
+
+### 7.3 Dar de baja un aparato
+
+Revocar su token no basta: el aparato seguiría sabiendo descifrarlo todo. Al dar de baja
+uno:
+
+1. El servidor deja de aceptar su token.
+2. Un aparato que sigue de alta genera una `masterKey` nueva, vuelve a cifrar todos los
+   registros y las imágenes, y la reparte a los demás por el mismo mecanismo del §7.2.
+3. El servidor borra lo cifrado con la llave vieja.
+
+Con solo favoritos es barato.
+
+### 7.4 Recuperación
+
+Si se pierden **todos** los aparatos a la vez, lo del servidor es ilegible por diseño.
+La única red es una copia de la `masterKey`:
+
+- **24 palabras** (lista BIP-39 en castellano) que Willy apunta a mano en una libreta.
+- Recomendado: una segunda copia en el llavero de Apple (Contraseñas de iCloud).
+- **No se puede exportar como archivo.** Un archivo en Descargas o en un correo lo
+  deshace todo.
+- Mientras quede un aparato vivo, se pueden generar palabras nuevas; al hacerlo, las
+  viejas dejan de valer (implica rotar la llave como en el §7.3).
+
+**El servidor nunca ve contraseñas ni contenido.** Ve lo mínimo: `entityId`, `seq`,
+`updatedAt`, `deviceId`, tamaño.
+
+## 8. El servidor
+
+Un buzón tonto y **append-only**. No fusiona: no puede, solo tiene datos cifrados.
 
 ```
 POST /changes          → sube un lote de registros cifrados; el servidor asigna `seq`
 GET  /changes?since=N  → devuelve los registros con seq > N, en orden
 PUT  /blobs/:blobId    → sube los bytes cifrados de una imagen (idempotente)
 GET  /blobs/:blobId    → los descarga
+POST /pairing          → buzón de emparejamiento (§7.2), con caducidad
+DELETE /devices/:id    → da de baja un aparato (§7.3)
 ```
 
-- Autenticación por **token de dispositivo** (Bearer), emitido al emparejar y
-  revocable de uno en uno.
-- El servidor **poda** los registros de una `entityId` superados por otro posterior:
-  el log no crece sin fin. Un blob se borra cuando ninguna entidad viva lo referencia.
-- Un solo *vault* (el de Willy). Multiusuario no entra en fase 1.
+- **Dónde corre:** un contenedor Docker en el Ubuntu de casa, **no** en la máquina
+  virtual de los agentes.
+- **Dónde escucha: solo en la red de casa** *(decidido el 17-11-2026)*. Desde internet
+  no existe. Fuera de casa cada aparato funciona con su copia y sincroniza al volver al
+  wifi. El túnel privado (WireGuard) para sincronizar fuera se valorará más adelante y
+  no cambia nada de lo demás.
+- **Conexión cifrada** (TLS), aunque sea en casa.
+- **Autenticación por token de aparato** (Bearer), emitido al emparejar y revocable de
+  uno en uno.
+- **Poda**: borra los registros de una `entityId` superados por otro posterior; una
+  imagen se borra cuando ninguna entidad viva la referencia.
+- **Si se rompe o se borra**, no hay pérdida: cada aparato tiene su copia completa y lo
+  vuelve a llenar.
+- **Cuándo sincroniza un aparato:** al abrir la app, al guardar un cambio y cada pocos
+  minutos mientras está abierta. Sin avisos push: no hacen falta en casa.
 
-**Fusión en el cliente:** por cada campo, gana el `(updatedAt, deviceId)` mayor;
-`deletedAt` gana a cualquier edición. Es last-write-wins por campo, no un CRDT: el
-único conflicto real —editar la misma nota en dos sitios a la vez— es rarísimo y
-perder la versión más vieja es aceptable. Un CRDT costaría diez veces más.
+## 9. Las mismas reglas en tres lenguajes
 
-## 7. Entornos y despliegue
+Swift, Kotlin y Rust tienen que cifrar, sellar y fusionar exactamente igual. Se fija un
+juego de **vectores de prueba compartidos** (entradas y salidas congeladas: llaves,
+nonces, registros cifrados, casos de fusión) que los tres pasan en sus tests. Viven en
+este repo y los otros dos los copian.
 
-- **Hermético**: el servidor y dos clientes falsos, sin secretos ni red hacia fuera.
-  Ahí se verifica lo determinista: que un borrado no resucite, que un reintento no
-  duplique, que dos ediciones concurrentes conserven ambos campos, que el servidor
-  no pueda descifrar nada. Es puerta de mezcla.
-- **Integrado**: el servicio real bajo el dominio local, con los dispositivos de
-  verdad. Cierra el hito, no las historias.
-- La documentación de despliegue (levantar, desplegar, revertir) nace en el mismo
-  commit que el primer `compose`. Direcciones y nombres de máquina, en el archivo
-  local ignorado por git.
+## 10. Entornos y despliegue
 
-## 8. Orden de trabajo
+- **test**: el servidor y clientes falsos, sin secretos ni red hacia fuera. Ahí se
+  verifica lo determinista: que un borrado no resucite, que un reintento no duplique,
+  que dos ediciones concurrentes conserven ambos campos, que un registro movido de
+  sitio se rechace, que un aparato dado de baja no pueda leer lo nuevo y que el
+  servidor no pueda descifrar nada. Sin verde no se mezcla.
+- **preproducción**: el servicio real en el Ubuntu de casa, con los aparatos de verdad.
+  Lo prueba Willy.
+- La documentación de despliegue (levantar, desplegar, revertir) nace en el mismo commit
+  que el primer `compose`. Direcciones y nombres de máquina, en el archivo local
+  ignorado por git.
 
-1. **App Android local** — crear item, copiar al portapapeles, favoritos, grupos,
-   items protegidos con huella/patrón y buscador. Sin red. Base cifrada desde el
-   primer día. Móvil y tablet.
-2. **Cifrado en reposo en macOS** — las ~150 líneas de Keychain + AES-GCM y la
-   migración del `store.json`.
-3. **Modelo sincronizable en el Kit** — `updatedAt` por campo, tombstones,
-   `deviceId`, `imageHash`. *No toca la red.*
-4. **`clipboard-sync-server`** — los cuatro endpoints y la poda, verificado en
-   hermético.
-5. **Sync en los dos clientes** — emparejamiento por QR y fusión.
+## 11. Orden de trabajo
 
-El 2 puede adelantarse o retrasarse, pero **nunca después del 4**: en cuanto salen
-bytes del aparato, el cifrado deja de ser opcional.
+1. **Arreglos de seguridad en macOS** (§3): marca de secreto, archivo cifrado entero
+   con migración, Touch ID sobre la llave.
+2. **App Android local** (§4) — sin red, cifrada desde el primer día. Móvil y tablet.
+3. **Modelo sincronizable en el Kit** (§6) y **vectores de prueba** (§9). No toca la red.
+4. **`clipboard-sync-server`** (§8), verificado en test.
+5. **Sync en Mac y Android** — emparejamiento (§7.2), fusión, baja (§7.3) y
+   recuperación (§7.4).
+6. **App de Linux** (§5).
 
-## 9. Abierto
+Nada sale de un aparato antes de que el punto 1 esté hecho.
 
-- Cómo se **capturan imágenes** en Android para el sync: la galería da URIs de
+## 12. Abierto
+
+- Cómo se **capturan imágenes** en Android para el sync: la galería da archivos de
   cualquier tamaño, y los topes de la app de escritorio no están pensados para eso.
-- Si el servidor debe **notificar** cambios (push) o basta con sincronizar al abrir
-  la app y al guardar. Empezar por lo segundo, que no necesita infraestructura.
+- Cómo se **desbloquea un item protegido en Linux**: no hay Touch ID. Lo natural es
+  pedir la contraseña del usuario de Ubuntu; está por comprobar qué ofrece el
+  escritorio para eso.
+- Lenguaje del servidor: propuesta Rust, para compartir la librería del §5. Sin decidir.
+- Túnel privado para sincronizar fuera de casa.
