@@ -13,6 +13,8 @@ archivos:
   - Sources/ClipboardManagerKit/Security/ProtectedKey.swift
   - Sources/ClipboardManagerKit/Security/ProtectedTextCipher.swift
   - Sources/ClipboardManagerKit/UI/PopoverActions.swift
+  - Sources/ClipboardManagerKit/Sync/DeviceIdentity.swift
+  - Tests/ClipboardManagerKitTests/SyncMergeVectorTests.swift
   - ClipboardManager.xcodeproj/project.pbxproj
   - scripts/build-release.sh
 ---
@@ -72,7 +74,8 @@ NSPasteboard → ClipboardMonitor → ClipboardStore (@Published) → SwiftUI en
 
 ## Datos cifrados en disco
 
-`store.enc`, `groups.enc` y cada archivo de `images/` se guardan cifrados. En
+`store.enc`, `groups.enc`, los tombstones (`item-tombstones.enc`,
+`group-tombstones.enc`) y cada archivo de `images/` se guardan cifrados. En
 memoria todo va en claro —salvo el texto de los items protegidos, ver la sección
 siguiente—: el cifrado vive solo en el borde con el disco (`JSONPersistenceService`
 para los JSON, `ImageStorage` para las imágenes), así que buscador, filas y editor no
@@ -93,7 +96,8 @@ saben nada de él.
 - **Fusión con el nombre antiguo** (`JSONPersistenceService.loadMerging`): si al
   cargar existe `store.json` —en claro de una versión anterior, o ya cifrado (`CLPE`)
   por una build sin publicar de §3.1—, sus items se suman a los de `store.enc` (los
-  que no tengan ya su `id`; si no hay `store.enc`, es la migración de siempre). Los
+  que no tengan ya su `id` ni un tombstone en `item-tombstones.enc`; si no hay
+  `store.enc`, es la migración de siempre). Los
   protegidos que traigan el texto en claro se cifran con la `protectedKey` antes de
   escribir (`ProtectedTextCipher.sealLegacyProtectedTexts`, la misma que usa
   `adoptInitialState`). El resultado se escribe en `store.enc`, se relee y se
@@ -102,8 +106,8 @@ saben nada de él.
   imágenes en claro se migran todas (también las huérfanas) en el mismo `load()`,
   mirando solo la cabecera de cada archivo (`FileCipher.fileIsEncrypted(at:)`); un
   fallo en una imagen no bloquea, se reintenta.
-- **Escritura durable** (`writeDurably`): migraciones y cada guardado de `store.enc`
-  y `groups.enc` escriben en un temporal oculto de la misma carpeta
+- **Escritura durable** (`writeDurably`): migraciones y cada guardado de `store.enc`,
+  `groups.enc` y los dos archivos de tombstones escriben en un temporal oculto de la misma carpeta
   (`.<nombre>.<UUID>.migrating`, permisos 0600), lo llevan al disco con
   `fcntl(F_FULLFSYNC)` (o `fsync` si el volumen no lo admite), lo releen y comprueban
   si es una migración, hacen `rename` y sincronizan la carpeta. Un corte de luz no
@@ -201,7 +205,9 @@ el item lleva `textContent = nil` y el texto en `sealedText`. Solo
 - **Dos anfitriones**: si uno tuviera el entitlement y el otro no, el segundo no vería
   una privada creada en el llavero de protección de datos y no podría revelar (no
   pierde nada). Hoy ninguno lo tiene.
-- **Sincronización (§6, sin hacer)**: la `protectedKey` no sale del aparato, así que
+- **Sincronización (sin red todavía)**: el modelo local ya es sincronizable (§6:
+  marcas por campo, tombstones, `imageHash`, `SyncMerge`; ver `historial/_dominio.md`),
+  pero el texto protegido sigue sin resolver: la `protectedKey` no sale del aparato, así que
   un `sealedText` no se puede leer en otro. Al sincronizar habrá que decidir si el texto
   protegido viaja descifrado y recifrado con la llave del sync (exige autenticar en el
   aparato que lo sube) o cifrado hacia la pública de cada aparato (el par X25519 lo
@@ -262,9 +268,18 @@ xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager build
 `swift build` compila el paquete aislado y es la forma más rápida de comprobar que la
 frontera pública sigue en pie sin arrancar Xcode.
 
-**No hay suite de tests**: `tests/ClipboardManagerTests/` existe pero está vacía.
-`PersistenceService` es un protocolo y `JSONPersistenceService` acepta un `fileURL`
-propio precisamente para poder inyectarlo en tests cuando se escriban.
+**Tests del paquete con `swift test`** (en el Mac; en Linux no hay compilador). El
+target `ClipboardManagerKitTests` (`Tests/ClipboardManagerKitTests/`, declarado en
+`Package.swift`) pasa los vectores de fusión de `Tests/vectors/merge-vectors.json`
+por `SyncMerge` y prueba marcas y tombstones del store con una persistencia en
+memoria (`PersistenceService` es un protocolo) y un `deviceId` fijo. Solo items de
+texto sin proteger: no tocan el Llavero ni `images/`. Los vectores no usan recursos
+de SwiftPM: el test los busca desde su propio `#filePath`, para que el JSON quede en
+una carpeta neutra que Kotlin y Rust copien.
+
+El proyecto de Xcode no ve esos tests: su target `ClipboardManagerTests` apunta a
+`tests/ClipboardManagerTests/`, que no existe (en el disco del Mac, que no distingue
+mayúsculas, sería `Tests/ClipboardManagerTests/`, otra carpeta) y no tiene tests.
 
 ## Trampas
 
@@ -285,3 +300,11 @@ propio precisamente para poder inyectarlo en tests cuando se escriban.
   Lo mismo con `com.widomin.clipboard-manager.protected-key` para los textos
   protegidos: la app arranca, pero no puede revelarlos ni protege nada nuevo.
 - Preferencias sueltas en `UserDefaults`: `viewMode`, `popoverWidth`, `popoverHeight`.
+- `device-id` en la carpeta de datos es el `deviceId` de las marcas de cambio: un
+  UUID en claro, no secreto. Borrarlo solo hace que se cree otro; no se pierde nada.
+- Los **tombstones** (lo borrado que fue favorito, y los grupos borrados), sin
+  contenido, van en `item-tombstones.enc` y `group-tombstones.enc`, nunca en
+  `store.enc`/`groups.enc`: una versión anterior (o Widomin con un Kit anterior) los
+  enseñaría como filas o grupos vacíos, los contaría en el tope y los volvería a
+  guardar como vivos. Si uno de esos archivos no se puede leer, la app se bloquea
+  como con `store.enc`.

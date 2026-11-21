@@ -1,7 +1,7 @@
 ---
 dominio: historial
 accion: borrar-y-vaciar
-actualizado: 2026-08-02
+actualizado: 2026-11-21
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
@@ -25,6 +25,12 @@ los **no favoritos** de la vista actual.
 - `clearNonFavorites(ofType:)` respeta el otro tipo y los favoritos; existe también
   `clearNonFavorites()` (todos los tipos), hoy sin UI que lo invoque.
 - Ambas rutas borran del disco los PNG de las imágenes eliminadas.
+- Todo pasa por `retire(_:)`: un item que **es o fue favorito** (borrar con 🗑 un
+  favorito, o vaciar uno al que se le quitó la estrella) deja un tombstone sin
+  contenido en `itemTombstones` (guardado aparte, en `item-tombstones.enc`), para la
+  sincronización futura. El historial que
+  nunca fue favorito se borra de verdad. En pantalla no cambia nada: el tombstone
+  no se enseña nunca (ver «Modelo sincronizable» en `_dominio.md`).
 - El botón de cabecera solo aparece en las vistas Texto e Imágenes, no en Grupos.
 
 ## Trampas

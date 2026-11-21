@@ -8,6 +8,15 @@
 //  consume the history budget. Favourites always sort first, then the
 //  rest — both groups ordered by creation date descending.
 //
+//  Modelo sincronizable (§6 del blueprint): cada mutación de un campo
+//  sincronizable le pone su marca `(updatedAt, deviceId)`, y borrar algo del
+//  conjunto sincronizado (favoritos y grupos) deja un tombstone en
+//  `itemTombstones` / `groupTombstones` en lugar de quitarlo sin rastro. Las
+//  listas `items` y `groups` solo tienen lo vivo: vistas, topes, buscador,
+//  deduplicación y filtro de grupos no ven nunca un tombstone. En disco también
+//  van aparte (`item-tombstones.enc`, `group-tombstones.enc`), para que una
+//  versión anterior que lea `store.enc`/`groups.enc` no los tome por vivos.
+//
 
 import Foundation
 import Combine
@@ -33,6 +42,21 @@ public final class ClipboardStore: ObservableObject {
 
     /// User-defined groups. Favourites can be assigned to at most one each.
     @Published public private(set) var groups: [ClipboardGroup] = []
+
+    /// Items borrados que estaban (o estuvieron) en el conjunto sincronizado,
+    /// ya sin contenido. Se guardan en su propio archivo
+    /// (`item-tombstones.enc`), nunca en `store.enc`, y no se enseñan nunca.
+    /// Hoy no se podan: ver «Tombstones» en
+    /// `docs/agent-context/historial/_dominio.md`.
+    public private(set) var itemTombstones: [ClipboardItem] = []
+
+    /// Grupos borrados, sin nombre. Se guardan en `group-tombstones.enc`.
+    public private(set) var groupTombstones: [ClipboardGroup] = []
+
+    /// `itemTombstones` / `groupTombstones` han cambiado desde la última vez
+    /// que se encolaron: el siguiente guardado escribe también su archivo.
+    private var itemTombstonesDirty = false
+    private var groupTombstonesDirty = false
 
     /// Whether the "Sin grupo" filter is selected. Part of the group-filter
     /// *selection*: when nothing is selected the filter is inactive and every
@@ -118,8 +142,28 @@ public final class ClipboardStore: ObservableObject {
     /// lista a medio cargar sobrescribiría el archivo con menos items.
     private var hasLoadedFromDisk = false
 
-    public init(persistence: PersistenceService) {
+    /// `deviceId` dado al crear el store, o `nil` hasta que se lee el de
+    /// `DeviceIdentity` (la primera vez que hace falta una marca).
+    private var resolvedDeviceId: String?
+
+    /// El aparato con el que este store firma sus cambios.
+    public var deviceId: String {
+        if let id = resolvedDeviceId { return id }
+        let id = DeviceIdentity.current()
+        resolvedDeviceId = id
+        return id
+    }
+
+    /// Marca para un cambio hecho ahora.
+    private func newStamp() -> SyncStamp {
+        SyncStamp.now(deviceId: deviceId)
+    }
+
+    /// `deviceId` solo hace falta para pruebas o para un anfitrión que quiera
+    /// fijarlo; por defecto se usa el de `DeviceIdentity`.
+    public init(persistence: PersistenceService, deviceId: String? = nil) {
         self.persistence = persistence
+        self.resolvedDeviceId = deviceId
         // Restore persisted view mode preference.
         if let raw = UserDefaults.standard.string(forKey: "viewMode"),
            let mode = ClipboardViewMode(rawValue: raw) {
@@ -134,23 +178,51 @@ public final class ClipboardStore: ObservableObject {
     public func load() async {
         let loaded = await persistence.load()
         let loadedGroups = await persistence.loadGroups()
+        let tombstones = await persistence.loadTombstones()
+
+        // Los tombstones de grupos van aparte: ninguna vista los ve. Los que
+        // aún vengan dentro de `groups.enc` (los escribió una build anterior de
+        // esta rama) se suman a los de su archivo y el guardado de abajo los
+        // saca de `groups.enc`. Si un id está vivo y borrado a la vez, gana el
+        // borrado (la regla de la fusión).
+        let inlineGroupTombstones = loadedGroups.filter { $0.isDeleted }
+        groupTombstones = SyncMerge.merge(local: tombstones.groups, remote: inlineGroupTombstones)
+        let deadGroupIDs = Set(groupTombstones.map(\.id))
+        let liveGroups = loadedGroups.filter { !$0.isDeleted && !deadGroupIDs.contains($0.id) }
         // Start every launch with the filter unselected (shows all), regardless
         // of whatever selection was last written to groups.json.
-        groups = loadedGroups.map { var g = $0; g.isFilterEnabled = false; return g }
-        adoptInitialState(loaded)
+        groups = liveGroups.map { var g = $0; g.isFilterEnabled = false; return g }
+        let groupsNeedRewrite = liveGroups.count != loadedGroups.count
+        if !inlineGroupTombstones.isEmpty { groupTombstonesDirty = true }
+
+        adoptInitialState(loaded, tombstones: tombstones.items)
+        if groupsNeedRewrite { persistGroups() }
     }
 
-    public func adoptInitialState(_ loaded: [ClipboardItem]) {
+    /// Pone en memoria lo leído de disco. `tombstones` son los de
+    /// `item-tombstones.enc`; también se apartan los que aún vengan mezclados
+    /// en `loaded` (de una build anterior de esta rama), y entonces se
+    /// reescriben los dos archivos.
+    public func adoptInitialState(_ loaded: [ClipboardItem], tombstones: [ClipboardItem] = []) {
         // Items protegidos de versiones anteriores, con el texto aún en claro:
         // se cifran en memoria y los escribe el `persist()` de abajo, de una vez
         // y de forma atómica. Morir a mitad deja el archivo anterior intacto y
         // se repite en el siguiente arranque.
-        let migration = ProtectedTextCipher.sealLegacyProtectedTexts(loaded)
+        //
+        // Los tombstones se apartan antes que nada; si un id aparece vivo y
+        // borrado a la vez, gana el borrado (la regla de la fusión).
+        let inline = loaded.filter { $0.isDeleted }
+        let allTombstones = SyncMerge.merge(local: tombstones, remote: inline)
+        let deadIDs = Set(allTombstones.map(\.id))
+        let live = loaded.filter { !$0.isDeleted && !deadIDs.contains($0.id) }
+        itemTombstones = allTombstones
+        if !inline.isEmpty { itemTombstonesDirty = true }
+        let migration = ProtectedTextCipher.sealLegacyProtectedTexts(live)
         // Enforce the per-type limits on load too, so a store that grew past
         // the limit under an older build (or a lowered limit) is normalised.
         items = capAllTypes(sort(migration.items))
         hasLoadedFromDisk = true
-        if migration.changed { persist() }
+        if migration.changed || live.count != loaded.count || itemTombstonesDirty { persist() }
     }
 
     // MARK: - Texto protegido
@@ -207,7 +279,17 @@ public final class ClipboardStore: ObservableObject {
         // Un item protegido hereda también su texto cifrado (es el mismo texto
         // que el capturado: por eso son duplicados), así que la copia nueva no
         // queda en claro.
+        //
+        // La captura hereda también el `id` y las marcas del item que
+        // sustituye: para la sincronización sigue siendo el mismo registro, y
+        // pegar un favorito no lo convierte en un borrado más uno nuevo. Las
+        // marcas se fijan con la fecha de creación vieja antes de que la nueva
+        // la sustituya (`effectiveStamps`).
+        if incoming.contentType == .image { fillMissingImageHashes() }
         if let existing = items.first(where: { isDuplicate($0, of: incoming) }) {
+            incoming.id = existing.id
+            incoming.stamps = existing.effectiveStamps()
+            incoming.imageHash = incoming.imageHash ?? existing.imageHash
             incoming.isFavorite = existing.isFavorite
             incoming.groupID = existing.groupID
             incoming.detail = existing.detail
@@ -257,17 +339,34 @@ public final class ClipboardStore: ObservableObject {
     /// copias de la misma imagen nunca son iguales byte a byte en disco; sin
     /// esta caché, cada imagen copiada descifraría todas las demás. El nombre
     /// es un UUID nuevo por imagen y su archivo no cambia nunca, así que una
-    /// entrada no caduca (la de una imagen borrada solo ocupa 32 bytes). Solo
+    /// entrada no caduca (la de una imagen borrada solo ocupa 64 caracteres). Solo
     /// vive en memoria.
-    private var imageDigests: [String: SHA256.Digest] = [:]
+    ///
+    /// Es el mismo valor que `ClipboardItem.imageHash` (hexadecimal): si el
+    /// item ya lo trae, no se lee el archivo.
+    private var imageDigests: [String: String] = [:]
 
-    private func imageDigest(_ item: ClipboardItem) -> SHA256.Digest? {
+    private func imageDigest(_ item: ClipboardItem) -> String? {
+        if let hash = item.imageHash { return hash }
         guard let filename = item.imageFilename else { return nil }
         if let cached = imageDigests[filename] { return cached }
         guard let data = ImageStorage.readData(filename: filename) else { return nil }
-        let digest = SHA256.hash(data: data)
+        let digest = ImageStorage.sha256Hex(data)
         imageDigests[filename] = digest
         return digest
+    }
+
+    /// Rellena `imageHash` en las imágenes guardadas antes de que existiera.
+    /// Se llama al capturar una imagen, cuando la deduplicación las iba a
+    /// descifrar de todos modos; lo guarda el `persist()` de `add`. Una imagen
+    /// cuyo archivo no se puede leer se queda sin hash y se reintenta la
+    /// próxima vez.
+    private func fillMissingImageHashes() {
+        for idx in items.indices where items[idx].contentType == .image && items[idx].imageHash == nil {
+            if let hash = imageDigest(items[idx]) {
+                items[idx].imageHash = hash
+            }
+        }
     }
 
     /// Removes an item from the list and deletes its image file, without
@@ -302,11 +401,24 @@ public final class ClipboardStore: ObservableObject {
                 .min(by: { $0.createdAt < $1.createdAt })
             else { break }
             result.removeAll { $0.id == drop.id }
-            if let filename = drop.imageFilename {
-                ImageStorage.delete(filename: filename)
-            }
+            retire(drop)
         }
         return result
+    }
+
+    /// Lo que pasa con un item que sale de la lista (borrado, tope, vaciado):
+    /// se borra su imagen del disco y, si es o fue favorito
+    /// (`leavesTombstone`), queda su tombstone para la sincronización. El
+    /// historial que nunca fue favorito desaparece sin rastro, como siempre.
+    /// Quien llama lo quita de `items` y persiste.
+    private func retire(_ item: ClipboardItem) {
+        if let filename = item.imageFilename {
+            ImageStorage.delete(filename: filename)
+        }
+        if item.leavesTombstone {
+            itemTombstones.append(item.tombstone(newStamp()))
+            itemTombstonesDirty = true
+        }
     }
 
     /// Applies `cap` to every content type.
@@ -325,11 +437,9 @@ public final class ClipboardStore: ObservableObject {
         // Grab the item before removing it so we can clean up its file.
         let toRemove = items.first { $0.id == id }
         items.removeAll { $0.id == id }
-        guard items.count != before else { return }
-        // Delete the image file if applicable.
-        if let filename = toRemove?.imageFilename {
-            ImageStorage.delete(filename: filename)
-        }
+        guard items.count != before, let removed = toRemove else { return }
+        // Borra la imagen y, si era del conjunto sincronizado, deja tombstone.
+        retire(removed)
         persist()
     }
 
@@ -337,9 +447,15 @@ public final class ClipboardStore: ObservableObject {
     /// item from any group, since group membership implies "favourite".
     public func toggleFavorite(id: ClipboardItem.ID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        let stamp = newStamp()
         items[idx].isFavorite.toggle()
-        if !items[idx].isFavorite {
+        items[idx].stamps.favorite = stamp
+        // Quitar la estrella saca el item del conjunto sincronizado: para los
+        // demás aparatos desaparece (`hasLeftSyncedSet`); aquí sigue en el
+        // historial hasta que el tope lo recicle, y entonces deja tombstone.
+        if !items[idx].isFavorite && items[idx].groupID != nil {
             items[idx].groupID = nil
+            items[idx].stamps.group = stamp
         }
         items = sort(items)
         persist()
@@ -371,6 +487,15 @@ public final class ClipboardStore: ObservableObject {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if isProtected && trimmedTitle.isEmpty { return false }
 
+        // Qué cambia de verdad, para marcar solo esos campos. Si no se puede
+        // leer el texto anterior (protegido sin la ventana de gracia abierta),
+        // se da por cambiado.
+        let before = items[idx]
+        let newTitle: String? = trimmedTitle.isEmpty ? nil : trimmedTitle
+        let contentChanged = plainTextIfAvailable(before) != text
+        let protectionChanged = before.isProtected != isProtected
+        let titleChanged = before.title != newTitle
+
         if isProtected {
             guard let sealed = sealProtectedText(text) else { return false }
             items[idx].sealedText = sealed
@@ -380,7 +505,12 @@ public final class ClipboardStore: ObservableObject {
             items[idx].sealedText = nil
         }
         items[idx].isProtected = isProtected
-        items[idx].title = trimmedTitle.isEmpty ? nil : trimmedTitle
+        items[idx].title = newTitle
+
+        let stamp = newStamp()
+        if contentChanged || protectionChanged { items[idx].stamps.content = stamp }
+        if protectionChanged { items[idx].stamps.protection = stamp }
+        if titleChanged { items[idx].stamps.title = stamp }
         persist()
         return true
     }
@@ -391,7 +521,11 @@ public final class ClipboardStore: ObservableObject {
     public func setDetail(id: ClipboardItem.ID, detail: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        items[idx].detail = trimmed.isEmpty ? nil : trimmed
+        let newDetail: String? = trimmed.isEmpty ? nil : trimmed
+        if items[idx].detail != newDetail {
+            items[idx].detail = newDetail
+            items[idx].stamps.detail = newStamp()
+        }
         persist()
     }
 
@@ -462,12 +596,8 @@ public final class ClipboardStore: ObservableObject {
         let removed = items.filter { !$0.isFavorite }
         items = items.filter { $0.isFavorite }
         guard items.count != before else { return }
-        // Delete image files of removed items.
-        for item in removed {
-            if let filename = item.imageFilename {
-                ImageStorage.delete(filename: filename)
-            }
-        }
+        // Borra sus imágenes; los que fueron favoritos dejan tombstone.
+        for item in removed { retire(item) }
         persist()
     }
 
@@ -478,11 +608,7 @@ public final class ClipboardStore: ObservableObject {
         guard !removed.isEmpty else { return }
         let removedIDs = Set(removed.map(\.id))
         items.removeAll { removedIDs.contains($0.id) }
-        for item in removed {
-            if let filename = item.imageFilename {
-                ImageStorage.delete(filename: filename)
-            }
-        }
+        for item in removed { retire(item) }
         persist()
     }
 
@@ -506,18 +632,27 @@ public final class ClipboardStore: ObservableObject {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
+        guard groups[idx].name != trimmed else { return }
         groups[idx].name = trimmed
+        groups[idx].nameStamp = newStamp()
         persistGroups()
     }
 
     /// Deletes a group. Items assigned to it are kept and become ungrouped
     /// (their content — text/passwords and images — is untouched).
+    ///
+    /// Todos los grupos se sincronizan, así que borrar uno siempre deja su
+    /// tombstone en `groupTombstones`.
     public func deleteGroup(id: ClipboardGroup.ID) {
-        guard groups.contains(where: { $0.id == id }) else { return }
+        guard let group = groups.first(where: { $0.id == id }) else { return }
+        let stamp = newStamp()
         groups.removeAll { $0.id == id }
+        groupTombstones.append(group.tombstone(stamp))
+        groupTombstonesDirty = true
         var itemsChanged = false
         for idx in items.indices where items[idx].groupID == id {
             items[idx].groupID = nil
+            items[idx].stamps.group = stamp
             itemsChanged = true
         }
         persistGroups()
@@ -550,8 +685,15 @@ public final class ClipboardStore: ObservableObject {
         guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return }
         // Ignore unknown group ids.
         if let gid = groupID, !groups.contains(where: { $0.id == gid }) { return }
-        items[idx].groupID = groupID
-        if groupID != nil { items[idx].isFavorite = true }
+        let stamp = newStamp()
+        if items[idx].groupID != groupID {
+            items[idx].groupID = groupID
+            items[idx].stamps.group = stamp
+        }
+        if groupID != nil && !items[idx].isFavorite {
+            items[idx].isFavorite = true
+            items[idx].stamps.favorite = stamp
+        }
         items = sort(items)
         persist()
     }
@@ -581,13 +723,26 @@ public final class ClipboardStore: ObservableObject {
     /// Encola el guardado desde el hilo principal, sin `Task` de por medio:
     /// así dos cambios seguidos se escriben en el orden en que ocurrieron y
     /// una foto vieja nunca pisa a la nueva.
+    ///
+    /// Los tombstones van a su propio archivo y se encolan **antes** que los
+    /// vivos: si la app muere entre las dos escrituras, al arrancar hay un id
+    /// vivo y borrado a la vez, y gana el borrado; al revés, el borrado se
+    /// perdería sin rastro.
     private func persist() {
         guard hasLoadedFromDisk, !isPersistenceBlocked else { return }
+        if itemTombstonesDirty {
+            persistence.enqueueSaveItemTombstones(itemTombstones)
+            itemTombstonesDirty = false
+        }
         persistence.enqueueSave(items)
     }
 
     private func persistGroups() {
         guard hasLoadedFromDisk, !isPersistenceBlocked else { return }
+        if groupTombstonesDirty {
+            persistence.enqueueSaveGroupTombstones(groupTombstones)
+            groupTombstonesDirty = false
+        }
         persistence.enqueueSaveGroups(groups)
     }
 }

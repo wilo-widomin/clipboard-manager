@@ -9,6 +9,7 @@
 
 import Foundation
 import AppKit  // for NSImage used by loadImage()
+import CryptoKit
 
 /// The type of content stored in a clipboard item.
 public enum ClipboardContentType: String, Codable, Sendable {
@@ -19,9 +20,14 @@ public enum ClipboardContentType: String, Codable, Sendable {
 /// A single clipboard entry captured by the monitor.
 public struct ClipboardItem: Identifiable, Codable, Sendable {
 
-    public let id: UUID
+    /// `var` solo dentro del paquete: al deduplicar, la captura nueva hereda el
+    /// `id` del item al que sustituye, para que siga siendo el mismo registro
+    /// de cara a la sincronización (ver `ClipboardStore.add`).
+    public internal(set) var id: UUID
     public let contentType: ClipboardContentType
-    public let createdAt: Date
+    /// `var` solo dentro del paquete: la fusión (`SyncMerge`) se queda con la
+    /// más reciente de las dos. Solo ordena la lista; no se sincroniza como campo.
+    public internal(set) var createdAt: Date
 
     /// The text content (nil for image items). Mutable because the right-click
     /// editor lets the user rewrite what was captured.
@@ -63,6 +69,72 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     /// thumbnail, so hiding its text would protect nothing. Su texto vive en
     /// `sealedText`, cifrado.
     public var isProtected: Bool = false
+
+    // MARK: - Sincronización (§6 del blueprint)
+
+    /// SHA-256 en hexadecimal (minúsculas) de los bytes **en claro** del PNG.
+    /// Es la identidad de la imagen entre aparatos; `imageFilename` sigue siendo
+    /// solo el nombre del archivo local. Se calcula al capturar, y para las
+    /// imágenes anteriores la primera vez que el store deduplica una imagen.
+    /// `nil` en textos y en una imagen cuyo archivo no se pudo leer.
+    public var imageHash: String? = nil
+
+    /// Marca `(updatedAt, deviceId)` de cada campo mutable. Ver `ItemFieldStamps`.
+    public var stamps: ItemFieldStamps = ItemFieldStamps()
+
+    /// Si existe, el item está **borrado** (tombstone): se conserva el registro,
+    /// sin contenido, para que el borrado gane a cualquier edición de otro
+    /// aparato. El store no lo enseña nunca: vive aparte, en
+    /// `ClipboardStore.itemTombstones`.
+    public var deletion: SyncStamp? = nil
+
+    /// Cuándo se borró, o `nil` si está vivo.
+    public var deletedAt: Date? { deletion?.updatedAt }
+
+    /// `true` si es un tombstone.
+    public var isDeleted: Bool { deletion != nil }
+
+    /// Está en el conjunto que se sincroniza (§2): favorito y vivo.
+    public var isInSyncedSet: Bool { isFavorite && !isDeleted }
+
+    /// Fue favorito y Willy le quitó la estrella: para los demás aparatos ha
+    /// salido del conjunto sincronizado (`isFavorite = false` con su marca),
+    /// pero aquí sigue en el historial hasta que el tope lo recicle.
+    public var hasLeftSyncedSet: Bool { !isFavorite && stamps.favorite != nil && !isDeleted }
+
+    /// Si al quitarlo de la lista hay que dejar tombstone: es o fue favorito.
+    /// El historial que nunca fue favorito no se sincroniza y se borra de verdad.
+    var leavesTombstone: Bool { isFavorite || stamps.favorite != nil }
+
+    /// Las marcas con las vacías rellenas con `SyncStamp.legacy(at: createdAt)`.
+    /// Hay que fijarlas así antes de cambiar `createdAt`, o las implícitas
+    /// cambiarían con ella.
+    public func effectiveStamps() -> ItemFieldStamps {
+        let implicit = SyncStamp.legacy(at: createdAt)
+        return ItemFieldStamps(
+            content: stamps.content ?? implicit,
+            detail: stamps.detail ?? implicit,
+            title: stamps.title ?? implicit,
+            favorite: stamps.favorite ?? implicit,
+            protection: stamps.protection ?? implicit,
+            group: stamps.group ?? implicit
+        )
+    }
+
+    /// El tombstone de este item: conserva `id`, `contentType` y `createdAt` y
+    /// tira todo lo demás (texto, texto cifrado, nota, título, imagen, marcas),
+    /// para que un borrado no deje contraseñas guardadas.
+    public func tombstone(_ deletion: SyncStamp) -> ClipboardItem {
+        ClipboardItem(
+            id: id,
+            contentType: contentType,
+            createdAt: createdAt,
+            textContent: nil,
+            imageFilename: nil,
+            isFavorite: false,
+            deletion: deletion
+        )
+    }
 
     /// Whether the item carries a non-empty detail note.
     public var hasDetail: Bool {
@@ -149,8 +221,12 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     public static func image(pngData: Data) -> ClipboardItem {
         let id = UUID()
         let filename = "\(id.uuidString).png"
+        // Sin archivo no hay hash: así una captura que no se pudo guardar no
+        // se toma por duplicada de otra (y no la borra al deduplicar).
+        var hash: String? = nil
         do {
             try ImageStorage.write(pngData: pngData, filename: filename)
+            hash = ImageStorage.sha256Hex(pngData)
         } catch {
             NSLog("ClipboardManager: no se pudo guardar la imagen cifrada: \(error.localizedDescription)")
         }
@@ -160,7 +236,8 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
             createdAt: Date(),
             textContent: nil,
             imageFilename: filename,
-            isFavorite: false
+            isFavorite: false,
+            imageHash: hash
         )
     }
 }
@@ -188,6 +265,9 @@ extension ClipboardItem {
         title = try container.decodeIfPresent(String.self, forKey: .title)
         isProtected = try container.decodeIfPresent(Bool.self, forKey: .isProtected) ?? false
         sealedText = try container.decodeIfPresent(String.self, forKey: .sealedText)
+        imageHash = try container.decodeIfPresent(String.self, forKey: .imageHash)
+        stamps = try container.decodeIfPresent(ItemFieldStamps.self, forKey: .stamps) ?? ItemFieldStamps()
+        deletion = try container.decodeIfPresent(SyncStamp.self, forKey: .deletion)
     }
 }
 
@@ -221,6 +301,11 @@ public enum ImageStorage {
         decodedImages.removeObject(forKey: filename as NSString)
         let fileURL = dir.appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    /// SHA-256 en hexadecimal (minúsculas) de unos bytes: el `imageHash`.
+    public static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     private static let writesLock = NSLock()

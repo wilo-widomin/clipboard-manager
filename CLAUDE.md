@@ -59,12 +59,20 @@ Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 │   ├── LocalKey.swift         — `localKey` en el Keychain; nunca crea otra si hay datos cifrados
 │   ├── FileCipher.swift       — AES-256-GCM y formato de archivo cifrado
 │   └── QuickLookTemporaryFiles.swift — copia descifrada temporal (0700) para Quick Look
+├── Sync/                      — modelo sincronizable, sin red (§6 del blueprint)
+│   ├── SyncStamp.swift        — marca (updatedAt, deviceId) + ItemFieldStamps
+│   ├── SyncMerge.swift        — fusión pura last-write-wins por campo; aún no la llama nadie
+│   └── DeviceIdentity.swift   — deviceId estable en el archivo device-id
 └── UI/
     ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
     ├── PopoverActions.swift          — the seam: what each host injects
     ├── PasteboardHelper.swift        — copy + reactivate target + Cmd+V
     ├── DetailEditorWindowController.swift — item editor window + RightClickCatcher
     └── PasswordCreatorWindowController.swift — modal «Nueva contraseña» (item manual + generador)
+
+Tests/                         — `swift test` (solo SwiftPM; el proyecto de Xcode no lo ve)
+├── ClipboardManagerKitTests/  — vectores de fusión + marcas y tombstones del store
+└── vectors/merge-vectors.json — vectores neutrales que copiarán Kotlin y Rust (§9)
 
 src/ClipboardManager/          — STANDALONE APP ONLY
 ├── App/
@@ -109,7 +117,25 @@ live in the status-item right-click menu).
 ## Models
 
 - **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only), sealedText(optional: texto protegido cifrado; con él `textContent` es nil). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
-- **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.enc`.
+- **ClipboardGroup**: id, name, isFilterEnabled, nameStamp?, deletion?. Persisted separately in `groups.enc`.
+- **Modelo sincronizable** (§6 de `docs/05-blueprint-sync-android.md`, todavía sin red): los
+  items llevan además `imageHash?` (SHA-256 en hexadecimal del PNG en claro), `stamps` (una
+  marca `(updatedAt, deviceId)` por campo: content = textContent+sealedText+isProtected, detail,
+  title, favorite, protection (solo informativa), group) y `deletion?`. Cada mutación del store marca solo los campos que
+  cambian de verdad; una marca ausente es implícita —`(createdAt, "")` en items, `(1970, "")` en
+  grupos— y nunca se escribe al cargar. Quitar algo que **es o fue** favorito (borrar, tope,
+  vaciar) y borrar cualquier grupo deja un **tombstone** sin contenido en `itemTombstones` /
+  `groupTombstones`; el historial que nunca fue favorito se sigue borrando de verdad. `items` y
+  `groups` solo tienen lo vivo, así que vistas, topes, buscador, deduplicación y filtro de grupos
+  no ven nunca un tombstone. En disco también van aparte, en `item-tombstones.enc` y
+  `group-tombstones.enc` (mismo cifrado y escritura durable que `store.enc`, y se escriben
+  antes que los vivos): `store.enc`/`groups.enc` solo tienen registros vivos, para que una
+  versión anterior o un Widomin con un Kit anterior no los tome por filas en blanco. Quitar la estrella deja el item
+  aquí (`hasLeftSyncedSet`) hasta que el tope lo recicle. Deduplicar conserva el `id` y las
+  marcas del item sustituido. El `deviceId` vive en el archivo `device-id` junto a `store.enc`
+  (lo comparten la app y Widomin). `SyncMerge.merge(local:remote:)` es pura y la fijan los
+  vectores de `Tests/vectors/merge-vectors.json`. Detalle en
+  `docs/agent-context/historial/_dominio.md`.
 - **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note; de un item protegido, solo título y nota).
 
 ## Groups

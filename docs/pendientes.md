@@ -15,6 +15,11 @@ pasa a «Hecho» en el mismo cambio.
   estar en el repositorio.
 - **Copias antiguas de Time Machine.** Las copias hechas antes del 21-11-2026 guardan el
   historial sin cifrar. Para quitarlo de ahí hay que borrar esas copias.
+- **Que los borrados guardados no crezcan sin fin.** Desde el modelo sincronizable, borrar
+  un favorito o un grupo deja una marca de «borrado» (sin el contenido) para que no
+  resucite desde otro aparato. Hoy no se limpian nunca: ocupan muy poco, pero cuando haya
+  sincronización hay que borrarlas cuando todos los aparatos las tengan (propuesta: y, como
+  mucho, a los 90 días). Detalle en `docs/agent-context/historial/_dominio.md`.
 - **Lo que el plan deja abierto** (§12 de `05-blueprint-sync-android.md`): cómo se
   desbloquea un protegido en Linux, cómo se meten imágenes desde Android, en qué
   lenguaje va el servidor y el túnel para sincronizar fuera de casa.

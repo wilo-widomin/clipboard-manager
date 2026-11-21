@@ -15,5 +15,12 @@ let package = Package(
             name: "ClipboardManagerKit",
             path: "Sources/ClipboardManagerKit"
         ),
+        // Solo para `swift test`. El proyecto de Xcode no lo ve: su target de
+        // tests apunta a otra carpeta (`tests/ClipboardManagerTests`).
+        .testTarget(
+            name: "ClipboardManagerKitTests",
+            dependencies: ["ClipboardManagerKit"],
+            path: "Tests/ClipboardManagerKitTests"
+        ),
     ]
 )

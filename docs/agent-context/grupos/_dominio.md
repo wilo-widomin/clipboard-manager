@@ -16,7 +16,8 @@ Un item pertenece **como mucho a un grupo**.
 ## Entidades
 
 - `ClipboardGroup` (`Models/ClipboardGroup.swift`) — `id`, `name`, `isFilterEnabled`
-  (selección del filtro, no una propiedad del grupo en sí). Tiene `init(from:)`
+  (selección del filtro, no una propiedad del grupo en sí), `nameStamp?` y
+  `deletion?` (modelo sincronizable, ambos con `decodeIfPresent`). Tiene `init(from:)`
   propio: `isFilterEnabled` ausente decodifica como `false`, para que al actualizar
   no aparezca de golpe un filtro que esconda medio historial.
 - Persistencia aparte en `groups.enc` (`persistGroups()`), no dentro de `store.enc`.
@@ -31,6 +32,15 @@ Un item pertenece **como mucho a un grupo**.
 - `assignGroup` ignora ids de grupo desconocidos.
 - La **selección** del filtro no se persiste entre arranques (`load()` la limpia),
   aunque `groups.enc` la escriba.
+- **Borrar un grupo deja tombstone** (`ClipboardGroup.tombstone`, sin nombre) en
+  `store.groupTombstones`, que se guarda aparte en `group-tombstones.enc` (nunca en
+  `groups.enc`, para que una versión anterior no enseñe un chip sin nombre) y nunca
+  está en `store.groups`: chips, casillas, menú 📁 y `assignGroup` no lo ven. Los
+  items que tenía pierden `groupID` con su marca `group`.
+- **Renombrar marca `nameStamp`** (solo si el nombre cambia). Un grupo sin marca
+  tiene la implícita `SyncStamp.legacyGroup` (1-1-1970): los grupos no tienen fecha
+  de creación. `isFilterEnabled` no lleva marca ni se sincroniza (§2 del blueprint).
+  Detalle del modelo y de la fusión en `historial/_dominio.md`, «Modelo sincronizable».
 
 ## Acciones documentadas
 

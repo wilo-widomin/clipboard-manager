@@ -1,0 +1,1055 @@
+{
+  "format": 1,
+  "about": [
+    "Vectores de fusión del modelo sincronizable (§6 y §9 de docs/05-blueprint-sync-android.md).",
+    "Cada caso: merge(local, remote) debe dar expected. Las listas se fusionan por id y el resultado va ordenado por id (UUID en mayúsculas, orden de bytes).",
+    "Fechas en milisegundos desde 1970. Una marca es {updatedAt, deviceId}; se ordena por updatedAt y luego por deviceId (bytes ASCII).",
+    "Marca ausente en un item = {createdAt de ese item, deviceId ''}; en un grupo = {0, ''}. El resultado de fusionar dos versiones lleva todas las marcas explícitas.",
+    "Si cualquiera de los dos lados tiene deletion, el resultado es un tombstone: solo id, contentType, createdAt (la mayor) y la deletion mayor.",
+    "textContent, sealedText e isProtected son un solo campo: los tres se toman del lado que gana la marca content. La marca protection del resultado es la mayor de las dos y no decide nada.",
+    "Campos ausentes valen: isFavorite false, isProtected false, isFilterEnabled false, el resto null/vacío. Compara normalizando así."
+  ],
+  "deviceIds": {
+    "A": "AAAAAAAA-0000-4000-8000-000000000001",
+    "B": "BBBBBBBB-0000-4000-8000-000000000002"
+  },
+  "itemCases": [
+    {
+      "name": "ediciones concurrentes de campos distintos: se conservan las dos",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "detail": "nota del Mac",
+          "stamps": {
+            "detail": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "detail": "nota del Mac",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismo campo: gana la marca más reciente (aunque sea la local)",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "detail": "nueva",
+          "stamps": {
+            "detail": {
+              "updatedAt": 1700000200000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "detail": "vieja",
+          "stamps": {
+            "detail": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "detail": "nueva",
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000200000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismo campo y misma fecha: desempata el deviceId mayor",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "title": "de A",
+          "stamps": {
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "title": "de B",
+          "stamps": {
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "title": "de B",
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contenido: texto y texto cifrado viajan juntos con la marca content",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "viejo",
+          "isFavorite": true
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "protección y contenido van juntos: gana content y no queda un item sin proteger con el texto solo cifrado",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "viejo",
+          "isProtected": false,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "protection": {
+              "updatedAt": 1700000300000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000300000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "protección y contenido van juntos: gana content y no queda un item protegido con el texto en claro",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "nuevo",
+          "isProtected": false,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "nuevo",
+          "isProtected": false,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "el borrado gana a una edición posterior",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isFavorite": false,
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "detail": "editada después",
+          "stamps": {
+            "detail": {
+              "updatedAt": 1700000300000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dos borrados: queda la marca de borrado mayor",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000200000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000200000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "quitar la estrella gana a una estrella vieja y saca el item del grupo",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": false,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "group": {
+              "updatedAt": 1700000200000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "groupID": "90000000-0000-4000-8000-000000000001",
+          "detail": "nota del móvil",
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "group": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "detail": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": false,
+          "detail": "nota del móvil",
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000200000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "volver a poner la estrella después gana a quitarla",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": false,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "group": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "datos sin marcas: la marca implícita es createdAt y cualquier edición le gana",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "original",
+          "isFavorite": true
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "editado",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "editado",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "createdAt: queda la más reciente y las marcas implícitas conservan la suya",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000200000,
+          "textContent": "hola",
+          "isFavorite": true
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "hola",
+          "isFavorite": true
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000200000,
+          "textContent": "hola",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "listas: lo que solo está en un lado pasa tal cual, también un tombstone",
+      "local": [
+        {
+          "id": "20000000-0000-4000-8000-000000000002",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "solo en el Mac",
+          "isFavorite": true
+        }
+      ],
+      "remote": [
+        {
+          "id": "30000000-0000-4000-8000-000000000003",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "solo en el móvil",
+          "isFavorite": true
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "solo en el móvil",
+          "isFavorite": true
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000002",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "solo en el Mac",
+          "isFavorite": true
+        },
+        {
+          "id": "30000000-0000-4000-8000-000000000003",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    }
+  ],
+  "groupCases": [
+    {
+      "name": "renombrar: gana el nombre más reciente",
+      "local": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Trabajo",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Oficina",
+          "nameStamp": {
+            "updatedAt": 1700000200000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Oficina",
+          "nameStamp": {
+            "updatedAt": 1700000200000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "grupo sin marca: su marca implícita es el 1-1-1970 y un renombrado le gana",
+      "local": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Trabajo"
+        }
+      ],
+      "remote": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Oficina",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Oficina",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "renombrar a la vez: desempata el deviceId mayor",
+      "local": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "de B",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "de A",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "de B",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "el borrado gana a un renombrado posterior",
+      "local": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Trabajo",
+          "nameStamp": {
+            "updatedAt": 1700000300000,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "",
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "",
+          "deletion": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "isFilterEnabled no se sincroniza: se conserva el local",
+      "local": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Trabajo",
+          "isFilterEnabled": true
+        }
+      ],
+      "remote": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Trabajo",
+          "isFilterEnabled": false
+        },
+        {
+          "id": "A0000000-0000-4000-8000-000000000002",
+          "name": "Casa",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "90000000-0000-4000-8000-000000000001",
+          "name": "Trabajo",
+          "isFilterEnabled": true,
+          "nameStamp": {
+            "updatedAt": 0,
+            "deviceId": ""
+          }
+        },
+        {
+          "id": "A0000000-0000-4000-8000-000000000002",
+          "name": "Casa",
+          "nameStamp": {
+            "updatedAt": 1700000100000,
+            "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    }
+  ]
+}

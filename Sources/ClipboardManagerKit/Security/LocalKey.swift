@@ -175,6 +175,8 @@ final class LocalKey: @unchecked Sendable {
             let dataDirectory = imagesDirectory.deletingLastPathComponent()
             candidates.append(dataDirectory.appendingPathComponent("store.enc"))
             candidates.append(dataDirectory.appendingPathComponent("groups.enc"))
+            candidates.append(dataDirectory.appendingPathComponent("item-tombstones.enc"))
+            candidates.append(dataDirectory.appendingPathComponent("group-tombstones.enc"))
             // Los nombres antiguos: una build sin publicar los escribía cifrados.
             candidates.append(dataDirectory.appendingPathComponent("store.json"))
             candidates.append(dataDirectory.appendingPathComponent("groups.json"))
