@@ -578,27 +578,16 @@ public final class ClipboardStore: ObservableObject {
         persistence.blockingError != nil
     }
 
+    /// Encola el guardado desde el hilo principal, sin `Task` de por medio:
+    /// así dos cambios seguidos se escriben en el orden en que ocurrieron y
+    /// una foto vieja nunca pisa a la nueva.
     private func persist() {
         guard hasLoadedFromDisk, !isPersistenceBlocked else { return }
-        let snapshot = items
-        Task { [persistence] in
-            do {
-                try await persistence.save(snapshot)
-            } catch {
-                NSLog("ClipboardManager: failed to persist: \(error.localizedDescription)")
-            }
-        }
+        persistence.enqueueSave(items)
     }
 
     private func persistGroups() {
         guard hasLoadedFromDisk, !isPersistenceBlocked else { return }
-        let snapshot = groups
-        Task { [persistence] in
-            do {
-                try await persistence.saveGroups(snapshot)
-            } catch {
-                NSLog("ClipboardManager: failed to persist groups: \(error.localizedDescription)")
-            }
-        }
+        persistence.enqueueSaveGroups(groups)
     }
 }
