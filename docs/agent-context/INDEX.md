@@ -25,7 +25,7 @@ como dependencia SPM. Si un segundo anfitrión lo necesitaría, va al paquete.
 
 - `Sources/ClipboardManagerKit/Models/` — `ClipboardItem`, `ClipboardGroup`, `ClipboardStore`
 - `Sources/ClipboardManagerKit/Monitor/` — polling del portapapeles
-- `Sources/ClipboardManagerKit/Persistence/` — JSON cifrado (`store.json` + `groups.json`)
+- `Sources/ClipboardManagerKit/Persistence/` — JSON cifrado (`store.enc` + `groups.enc`; funde los antiguos `store.json`/`groups.json`)
 - `Sources/ClipboardManagerKit/UI/` — popover, filas, chips, buscador, editor, `PopoverActions`
 - `Sources/ClipboardManagerKit/Security/` — `ProtectedAccess`, `ProtectedKey` y `ProtectedTextCipher` (items protegidos, cifrados con su propia llave), `PasswordGenerator` (modal «Nueva contraseña») y el cifrado en disco: `LocalKey`, `FileCipher`, `QuickLookTemporaryFiles` (ver `arquitectura.md`)
 - `src/ClipboardManager/App/` — entry point (`AppDelegate`), Info.plist, versión

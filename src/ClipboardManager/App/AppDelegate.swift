@@ -44,20 +44,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = ClipboardStore(persistence: persistence)
         self.store = store
 
-        // Install the status item.
-        let controller = StatusItemController(store: store)
-        self.statusItemController = controller
-        self.monitor = ClipboardMonitor(store: store)
-
         // Load persisted state. Hasta que no se ha leído (y descifrado) lo que
-        // hay en disco no se empieza a capturar: si los datos no se pueden
-        // abrir, la app avisa y se cierra sin escribir nada.
+        // hay en disco no aparece el icono ni se empieza a capturar: lo que se
+        // creara antes (un grupo, una contraseña a mano) no se guardaría y
+        // `load()` lo sustituiría. Si los datos no se pueden abrir, la app
+        // avisa y se cierra sin escribir nada.
         Task {
             await store.load()
             if let error = persistence.blockingError {
                 self.stopBecauseDataIsUnreadable(error)
                 return
             }
+            self.statusItemController = StatusItemController(store: store)
+            self.monitor = ClipboardMonitor(store: store)
             self.startMonitoring()
         }
     }

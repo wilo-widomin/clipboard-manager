@@ -1,6 +1,6 @@
 ---
 dominio: grupos
-actualizado: 2026-08-02
+actualizado: 2026-11-21
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardGroup.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -19,7 +19,7 @@ Un item pertenece **como mucho a un grupo**.
   (selección del filtro, no una propiedad del grupo en sí). Tiene `init(from:)`
   propio: `isFilterEnabled` ausente decodifica como `false`, para que al actualizar
   no aparezca de golpe un filtro que esconda medio historial.
-- Persistencia aparte en `groups.json` (`persistGroups()`), no dentro de `store.json`.
+- Persistencia aparte en `groups.enc` (`persistGroups()`), no dentro de `store.enc`.
 
 ## Invariantes
 
@@ -30,7 +30,7 @@ Un item pertenece **como mucho a un grupo**.
   espacios se rechaza al crear y al renombrar.
 - `assignGroup` ignora ids de grupo desconocidos.
 - La **selección** del filtro no se persiste entre arranques (`load()` la limpia),
-  aunque `groups.json` la escriba.
+  aunque `groups.enc` la escriba.
 
 ## Acciones documentadas
 

@@ -141,7 +141,11 @@ public final class ClipboardStore: ObservableObject {
     }
 
     public func adoptInitialState(_ loaded: [ClipboardItem]) {
-        let migration = sealLegacyProtectedTexts(loaded)
+        // Items protegidos de versiones anteriores, con el texto aún en claro:
+        // se cifran en memoria y los escribe el `persist()` de abajo, de una vez
+        // y de forma atómica. Morir a mitad deja el archivo anterior intacto y
+        // se repite en el siguiente arranque.
+        let migration = ProtectedTextCipher.sealLegacyProtectedTexts(loaded)
         // Enforce the per-type limits on load too, so a store that grew past
         // the limit under an older build (or a lowered limit) is normalised.
         items = capAllTypes(sort(migration.items))
@@ -150,37 +154,6 @@ public final class ClipboardStore: ObservableObject {
     }
 
     // MARK: - Texto protegido
-
-    /// Migración de los items protegidos de versiones anteriores, que traen el
-    /// texto en claro: se cifra con la `protectedKey` (creándola si hace falta,
-    /// sin pedir autenticación) y se quita el claro. Solo en memoria; lo
-    /// escribe el `persist()` de quien llama, de una vez y de forma atómica, así
-    /// que morir a mitad deja el archivo anterior intacto y se repite en el
-    /// siguiente arranque. Si la llave no se puede obtener, no se toca nada: el
-    /// item sigue protegido en la interfaz como antes y se reintenta después.
-    private func sealLegacyProtectedTexts(_ list: [ClipboardItem]) -> (items: [ClipboardItem], changed: Bool) {
-        let needsSealing: (ClipboardItem) -> Bool = {
-            $0.isProtected && $0.contentType == .text && $0.sealedText == nil && $0.textContent != nil
-        }
-        guard list.contains(where: needsSealing),
-              let publicKey = protectedPublicKey(sealedTextExists: list.contains { $0.sealedText != nil })
-        else { return (list, false) }
-
-        var result = list
-        var changed = false
-        for index in result.indices where needsSealing(result[index]) {
-            guard let text = result[index].textContent else { continue }
-            do {
-                result[index].sealedText = try ProtectedTextCipher.seal(text, to: publicKey)
-                result[index].textContent = nil
-                changed = true
-            } catch {
-                NSLog("ClipboardManager: no se pudo cifrar un elemento protegido antiguo: \(error.localizedDescription)")
-            }
-        }
-        if changed { NSLog("ClipboardManager: elementos protegidos antiguos cifrados con la protectedKey") }
-        return (result, changed)
-    }
 
     private func protectedPublicKey(sealedTextExists: Bool) -> Curve25519.KeyAgreement.PublicKey? {
         do {
@@ -218,6 +191,7 @@ public final class ClipboardStore: ObservableObject {
 
     /// Adds a new item, enforcing the per-type max count (oldest non-favourite drops).
     public func add(_ item: ClipboardItem) {
+        guard !isPersistenceBlocked else { return }
         var incoming = item
 
         // Deduplicate: re-copying an item already in the list (e.g. clicking a
@@ -270,16 +244,30 @@ public final class ClipboardStore: ObservableObject {
             guard let incomingText = b.textContent else { return false }
             return plainTextIfAvailable(a) == incomingText
         case .image:
-            return imageBytes(a) == imageBytes(b)
+            // Si cualquiera de las dos no se puede leer (archivo que falta, que
+            // no descifra), no son duplicadas: dos `nil` iguales harían que
+            // `add` borrase la imagen existente.
+            guard let x = imageDigest(a), let y = imageDigest(b) else { return false }
+            return x == y
         }
     }
 
-    /// Reads an image item's bytes from disk for content comparison, ya
-    /// descifrados: el archivo cifrado lleva un nonce aleatorio, así que dos
-    /// copias de la misma imagen nunca son iguales byte a byte en disco.
-    private func imageBytes(_ item: ClipboardItem) -> Data? {
+    /// Resumen SHA-256 de los bytes ya descifrados de cada imagen, por nombre
+    /// de archivo. El archivo cifrado lleva un nonce aleatorio, así que dos
+    /// copias de la misma imagen nunca son iguales byte a byte en disco; sin
+    /// esta caché, cada imagen copiada descifraría todas las demás. El nombre
+    /// es un UUID nuevo por imagen y su archivo no cambia nunca, así que una
+    /// entrada no caduca (la de una imagen borrada solo ocupa 32 bytes). Solo
+    /// vive en memoria.
+    private var imageDigests: [String: SHA256.Digest] = [:]
+
+    private func imageDigest(_ item: ClipboardItem) -> SHA256.Digest? {
         guard let filename = item.imageFilename else { return nil }
-        return ImageStorage.readData(filename: filename)
+        if let cached = imageDigests[filename] { return cached }
+        guard let data = ImageStorage.readData(filename: filename) else { return nil }
+        let digest = SHA256.hash(data: data)
+        imageDigests[filename] = digest
+        return digest
     }
 
     /// Removes an item from the list and deletes its image file, without
@@ -444,6 +432,7 @@ public final class ClipboardStore: ObservableObject {
         groupID: ClipboardGroup.ID?,
         isProtected: Bool
     ) -> ClipboardItem.ID? {
+        guard !isPersistenceBlocked else { return nil }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if isProtected && trimmedTitle.isEmpty { return nil }
@@ -503,6 +492,7 @@ public final class ClipboardStore: ObservableObject {
     /// nil if the name is blank. Duplicate names are allowed (ids are unique).
     @discardableResult
     public func addGroup(name: String) -> UUID? {
+        guard !isPersistenceBlocked else { return nil }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let group = ClipboardGroup(name: trimmed)
@@ -580,8 +570,16 @@ public final class ClipboardStore: ObservableObject {
 
     // MARK: - Persistence
 
+    /// `true` si la persistencia se ha bloqueado al leer (datos que no se
+    /// pudieron abrir). Entonces el store no añade nada ni guarda: el
+    /// historial en memoria está vacío y escribirlo pisaría el de disco. Así
+    /// un anfitrión que no mire `blockingError` tampoco captura a ciegas.
+    public var isPersistenceBlocked: Bool {
+        persistence.blockingError != nil
+    }
+
     private func persist() {
-        guard hasLoadedFromDisk else { return }
+        guard hasLoadedFromDisk, !isPersistenceBlocked else { return }
         let snapshot = items
         Task { [persistence] in
             do {
@@ -593,7 +591,7 @@ public final class ClipboardStore: ObservableObject {
     }
 
     private func persistGroups() {
-        guard hasLoadedFromDisk else { return }
+        guard hasLoadedFromDisk, !isPersistenceBlocked else { return }
         let snapshot = groups
         Task { [persistence] in
             do {

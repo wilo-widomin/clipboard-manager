@@ -61,14 +61,14 @@ clipboard-manager/
 - ✅ Editor por item: clic derecho en una fila abre una ventana redimensionable donde
   puedes **reescribir el texto copiado** y añadirle una **nota de detalle** (en las
   imágenes solo la nota). Las filas con nota muestran un icono 📝 con la nota como
-  tooltip. Todo se guarda cifrado en disco (`store.json`, `groups.json` e imágenes), con
+  tooltip. Todo se guarda cifrado en disco (`store.enc`, `groups.enc` e imágenes), con
   la clave en el Llavero de macOS, así que no lo uses para secretos
 - ✅ Buscador sobre las listas: filtra por el texto, el título y la nota, sin distinguir
   mayúsculas ni acentos. No se guarda entre arranques
 - ✅ Items protegidos (solo texto): en la lista se ve un título con un candado en lugar
   del contenido, y para pegarlos o abrir su editor pide Touch ID o la contraseña del
   Mac (sin volver a preguntar durante 15 minutos). Oculta el contenido a quien mire la
-  pantalla, pero solo dentro de la app: el texto va cifrado en `store.json` con la clave
+  pantalla, pero solo dentro de la app: el texto va cifrado en `store.enc` con la clave
   del Llavero, y atarlo a una clave propia de Touch ID es el siguiente paso
 - ✅ Contraseñas creadas a mano: el botón «+ Nueva contraseña» al pie de la pestaña
   Texto abre un modal con título, contraseña, detalle, grupo y «Protegida». Incluye un
@@ -82,7 +82,7 @@ clipboard-manager/
 - ✅ Click en un item → lo pega en la app donde estabas
 - ✅ Borrar un item es directo (🗑); vaciar de golpe los no favoritos de una vista
   (🗑 de la cabecera) pide confirmación
-- ✅ Persistencia JSON entre reinicios (store.json + groups.json)
+- ✅ Persistencia JSON entre reinicios (store.enc + groups.enc, cifrados)
 - ✅ Sin Dock (LSUIElement), solo icono en barra de menús
 
 ## Licencia

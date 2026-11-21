@@ -48,10 +48,12 @@ En `src/ClipboardManager/` solo queda lo que exige ser dueño de la barra de men
 
 `AppDelegate` (entry point programático, sin storyboard) instala el menú principal
 mínimo de `EditMenu` y crea
-`JSONPersistenceService` → `ClipboardStore` → `StatusItemController`. Espera a que
-`store.load()` termine y, solo si `persistence.blockingError` es `nil`, arranca el
-`Timer` de 1 Hz que llama a `ClipboardMonitor.tick()`. Si no, enseña un aviso y se
-cierra sin escribir nada (ver «Datos cifrados en disco»).
+`JSONPersistenceService` → `ClipboardStore`. Espera a que `store.load()` termine y,
+solo si `persistence.blockingError` es `nil`, crea el `StatusItemController` (el
+icono y el popover), el `ClipboardMonitor` y el `Timer` de 1 Hz que llama a
+`tick()`. Antes no hay icono: lo que se creara durante la carga (un grupo, una
+contraseña a mano) no se guardaría y `load()` lo sustituiría. Si hay error, enseña un
+aviso y se cierra sin escribir nada (ver «Datos cifrados en disco»).
 
 **El menú principal existe aunque no se vea.** Siendo una app `.accessory` no hay
 barra de menús, pero AppKit resuelve los atajos de teclado estándar recorriendo
@@ -63,14 +65,14 @@ first responder. No lo quites por «no se usa».
 ```
 NSPasteboard → ClipboardMonitor → ClipboardStore (@Published) → SwiftUI en NSPopover
                                         ↓
-                       JSONPersistenceService (store.json / groups.json)
+                       JSONPersistenceService (store.enc / groups.enc)
                                         ↓  AES-256-GCM con la localKey (FileCipher)
                                        disco (también images/*, vía ImageStorage)
 ```
 
 ## Datos cifrados en disco
 
-`store.json`, `groups.json` y cada archivo de `images/` se guardan cifrados. En
+`store.enc`, `groups.enc` y cada archivo de `images/` se guardan cifrados. En
 memoria todo va en claro —salvo el texto de los items protegidos, ver la sección
 siguiente—: el cifrado vive solo en el borde con el disco (`JSONPersistenceService`
 para los JSON, `ImageStorage` para las imágenes), así que buscador, filas y editor no
@@ -80,12 +82,35 @@ saben nada de él.
   hoy `0x01`) + `AES.GCM.SealedBox.combined` (nonce aleatorio de 12 bytes + cifrado +
   etiqueta de 16). La cabecera de 5 bytes va también como dato autenticado. El
   contenido descifrado es el mismo JSON o PNG de siempre.
-- **Legado**: un archivo que no empieza por `"CLPE"` es el formato en claro anterior.
-  Se sigue leyendo, y `load()` lo migra: cifra en un temporal oculto
-  (`.store.json.migrating`) en la misma carpeta, lo relee, comprueba que descifra a
-  los mismos bytes y solo entonces hace `rename` sobre el original. Morir a mitad deja
-  el original intacto y la migración se repite. Las imágenes se migran todas (también
-  las huérfanas) en el mismo `load()`; un fallo en una imagen no bloquea, se reintenta.
+- **Nombres nuevos a propósito**: lo cifrado va en `store.enc` y `groups.enc`, nunca
+  en `store.json`/`groups.json`. Una versión anterior de la app (sin cifrado) que se
+  abra después de migrar trataba un `store.json` ilegible como corrupto, arrancaba
+  vacía y lo pisaba en la primera copia: se perdía todo. Con otro nombre, esa versión
+  no ve nada, arranca vacía y escribe un `store.json` nuevo en claro, sin tocar el
+  cifrado. Las imágenes conservan su nombre: una versión anterior nunca reescribe un
+  archivo de imagen existente (cada captura usa un UUID nuevo y solo borra las de sus
+  propios items).
+- **Fusión con el nombre antiguo** (`JSONPersistenceService.loadMerging`): si al
+  cargar existe `store.json` —en claro de una versión anterior, o ya cifrado (`CLPE`)
+  por una build sin publicar de §3.1—, sus items se suman a los de `store.enc` (los
+  que no tengan ya su `id`; si no hay `store.enc`, es la migración de siempre). Los
+  protegidos que traigan el texto en claro se cifran con la `protectedKey` antes de
+  escribir (`ProtectedTextCipher.sealLegacyProtectedTexts`, la misma que usa
+  `adoptInitialState`). El resultado se escribe en `store.enc`, se relee y se
+  comprueba, y solo entonces se borra `store.json`. Morir a mitad deja `store.json`
+  intacto y la fusión se repite sin duplicar (por `id`). Igual con `groups.json`. Las
+  imágenes en claro se migran todas (también las huérfanas) en el mismo `load()`,
+  mirando solo la cabecera de cada archivo (`FileCipher.fileIsEncrypted(at:)`); un
+  fallo en una imagen no bloquea, se reintenta.
+- **Escritura durable** (`writeDurably`): migraciones y cada guardado de `store.enc`
+  y `groups.enc` escriben en un temporal oculto de la misma carpeta
+  (`.<nombre>.<UUID>.migrating`, permisos 0600), lo llevan al disco con
+  `fcntl(F_FULLFSYNC)` (o `fsync` si el volumen no lo admite), lo releen y comprueban
+  si es una migración, hacen `rename` y sincronizan la carpeta. Un corte de luz no
+  deja un archivo cifrado a medias en lugar del original. El UUID evita que la app
+  suelta y Widomin se pisen el temporal; `load()` solo borra los temporales de más de
+  diez minutos. Las imágenes nuevas se siguen escribiendo con `.atomic` sin
+  `F_FULLFSYNC`.
 - **`localKey`** (`Security/LocalKey.swift`): 32 bytes aleatorios en el Keychain,
   contraseña genérica con servicio `com.widomin.clipboard-manager.local-key` y cuenta
   `localKey`, en el **llavero de sesión** (`kSecUseDataProtectionKeychain = false`).
@@ -101,10 +126,14 @@ saben nada de él.
 - **Bloqueo**: si un archivo existente no se puede leer (sin llave, descifrado que
   falla, versión de formato desconocida, JSON roto), `JSONPersistenceService` guarda
   el error en `blockingError` y desde ese momento todo `save` lanza
-  `PersistenceError.writesBlocked`. No se escribe nunca en claro: sin llave, no se
-  escribe. `ClipboardStore` además no persiste nada hasta que `load()` (o
-  `adoptInitialState`) ha terminado, para no pisar el archivo con una lista a medio
-  cargar.
+  `PersistenceError.writesBlocked` e `ImageStorage.write` también se niega
+  (`ImageStorage.blockWrites()`). `blockingError` forma parte del protocolo
+  `PersistenceService`, y con él `ClipboardStore.isPersistenceBlocked` es `true`: el
+  store no añade (`add`, `addManual`, `addGroup`) ni guarda, y `ClipboardMonitor` no
+  captura. Así un anfitrión que no mire `blockingError` tampoco llena un historial
+  vacío. No se escribe nunca en claro: sin llave, no se escribe. `ClipboardStore`
+  además no persiste nada hasta que `load()` (o `adoptInitialState`) ha terminado,
+  para no pisar el archivo con una lista a medio cargar.
 - **Quick Look** necesita un archivo: `QuickLookTemporaryFiles` descifra una copia en
   `$TMPDIR/ClipboardManagerKit-QuickLook-<bundle id>/` (carpeta 0700, archivo 0600),
   la borra al terminar `qlmanage` y purga la carpeta entera en cada `load()`.
@@ -118,7 +147,7 @@ migración siguen teniendo el historial en claro: cifrar ahora no las reescribe.
 
 ## Texto protegido con su propia llave
 
-El texto de un item protegido se cifra **otra vez**, dentro del `store.json` ya
+El texto de un item protegido se cifra **otra vez**, dentro del `store.enc` ya
 cifrado, con la `protectedKey` (§3.2 del blueprint). En memoria tampoco está en claro:
 el item lleva `textContent = nil` y el texto en `sealedText`. Solo
 `ProtectedAccess.reveal` lo descifra, en una copia, tras autenticar.
@@ -146,7 +175,7 @@ el item lleva `textContent = nil` y el texto en `sealedText`. Solo
   `evaluatePolicy` antes de leerla). El sistema solo impone lo mismo que con la
   `localKey`: sesión abierta y lista de acceso atada a la firma. Lo que sí se gana hoy:
   el texto protegido no está en claro en memoria (salvo al pegar o con el editor
-  abierto), ni en un `store.json` descifrado con la `localKey`; y la llave privada solo
+  abierto), ni en un `store.enc` descifrado con la `localKey`; y la llave privada solo
   está en memoria los 15 minutos de la ventana de gracia. Con una build firmada con
   perfil y la capacidad «Keychain Sharing», las llaves **nuevas** quedarían bajo
   `.userPresence` impuesto por macOS; una llave ya creada en el llavero de sesión no se
@@ -237,9 +266,11 @@ propio precisamente para poder inyectarlo en tests cuando se escriban.
   en silencio (`PasteboardHelper.postCmdV` lo detecta y lanza el prompt del sistema).
 - El `.dmg` se firma con "Apple Development" y **no se notariza**: en la máquina de
   destino hay que abrirlo la primera vez con clic derecho → Abrir.
-- Datos de usuario en `~/Library/Application Support/ClipboardManager/`: `store.json`,
-  `groups.json` e `images/*.png`, **cifrados** (los `.png` conservan la extensión pero
-  ya no son PNG en disco). `cat store.json` debe enseñar basura que empieza por `CLPE`.
+- Datos de usuario en `~/Library/Application Support/ClipboardManager/`: `store.enc`,
+  `groups.enc` e `images/*.png`, **cifrados** (los `.png` conservan la extensión pero
+  ya no son PNG en disco). `head -c 4 store.enc` debe enseñar `CLPE`. Un `store.json`
+  o `groups.json` ahí es de una versión anterior (o de una build sin publicar) y
+  desaparece en el siguiente arranque, fundido en el `.enc`.
 - Una build firmada con otro certificado (o sin firmar) es «otra app» para el
   Llavero: macOS pide permiso para leer la llave. Rechazarlo cierra la app con aviso;
   no se pierde nada.

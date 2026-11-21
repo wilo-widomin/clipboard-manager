@@ -4,7 +4,7 @@
 //
 //  Cifrado de los archivos de datos en el borde de la persistencia.
 //
-//  Formato de un archivo cifrado (store.json, groups.json y cada imagen):
+//  Formato de un archivo cifrado (store.enc, groups.enc y cada imagen):
 //
 //      "CLPE" (4 bytes)  versión (1 byte, hoy 0x01)  AES.GCM combined
 //                                                    (nonce 12 + cifrado + etiqueta 16)
