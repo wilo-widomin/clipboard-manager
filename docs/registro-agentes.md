@@ -42,3 +42,10 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 |---|---|---|---|---|---|
 | 2026-11-21 13:45 | 2026-11-21 13:45 | `gestores-contrasenas` | Sonnet | Lo copiado desde el llavero de Apple sigue entrando en la lista: no capturar nada cuando la app de delante es un gestor de contraseñas (Acceso a Llaveros, Contraseñas, 1Password…). Solo `ClipboardMonitor.swift`. Rama propia. | Hecho y mezclado; sin compilar. Lista de 18 gestores; algunos identificadores sin confirmar (si no existen, no hacen nada). |
 | 2026-11-21 13:45 | 2026-11-21 13:45 | `ventana-editor` | Sonnet | La ventana del editor no vuelve al frente al hacer clic derecho otra vez, y abrir un item ya abierto crea otra pestaña. Reutilizar la ventana de ese item y traerla delante. Rama propia. | Hecho y mezclado; sin compilar. No había un arreglo anterior perdido. Las ventanas ya no se agrupan en pestañas. |
+
+## Siguiente fase: Android local y modelo sincronizable (plan §4 y §6)
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-21 13:52 | — | `android-base-cifrada` | Opus | Repo de Android, rama `feat/app-local-cifrada`: que compile el trabajo de agosto; modelo con grupos y protegidos; base entera cifrada (SQLCipher + Keystore); protegidos con llave que exige huella o patrón al sistema; crear, copiar, favoritos, grupos, buscador; tests; quitar la dirección de casa del documento. Puede compilar aquí. | en curso |
+| 2026-11-21 13:52 | — | `modelo-sincronizable` | Opus | Mac (§6): identificador de aparato, fecha y aparato por cada campo, borrados marcados para lo que se sincroniza, huella de las imágenes, la regla de fusión y sus casos de prueba compartidos. Sin red. Rama propia. | en curso |
