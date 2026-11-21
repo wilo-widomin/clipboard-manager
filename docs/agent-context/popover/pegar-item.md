@@ -53,6 +53,10 @@ monitores fallaba siempre**.
 
 ## Reglas
 
+- Item protegido: `copyAndPaste(text:reactivating:concealed:)` con `concealed: true`
+  usa `prepareForNewContents(with: .currentHostOnly)` (no viaja por Portapapeles
+  Universal), añade `org.nspasteboard.ConcealedType` y a los 30 s borra el portapapeles
+  solo si su `changeCount` sigue siendo el de la escritura (si Willy copió otra cosa, no se toca).
 - Texto: `setString`. Imagen: se carga del disco (`item.loadImage()`) y se escribe con
   `writeObjects`.
 - Sin permiso de **Accesibilidad** el `Cmd+V` se descarta en silencio: `postCmdV`

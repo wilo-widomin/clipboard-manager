@@ -27,12 +27,35 @@ public enum PasteboardHelper {
     /// worth paying in the common case.
     private static let maxWait: TimeInterval = 2.0
 
+    /// Tipo nspasteboard.org que pide a los historiales de portapapeles ignorar el contenido.
+    private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+
+    /// Segundos que un texto `concealed` permanece en el portapapeles antes de borrarse.
+    private static let concealedLifetime: TimeInterval = 30
+
     /// Copies text to the pasteboard and pastes it into `target` (the app that
     /// had focus before the menu opened).
-    public static func copyAndPaste(text: String, reactivating target: NSRunningApplication?) {
+    ///
+    /// Con `concealed` el texto se marca como secreto (`ConcealedType`), se
+    /// escribe solo en este Mac (sin Portapapeles Universal) y se borra a los
+    /// 30 s si nadie ha copiado nada mientras tanto.
+    public static func copyAndPaste(text: String, reactivating target: NSRunningApplication?, concealed: Bool = false) {
         let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(text, forType: .string)
+        if concealed {
+            _ = pb.prepareForNewContents(with: .currentHostOnly)
+            pb.setString(text, forType: .string)
+            pb.setData(Data(), forType: concealedType)
+            let writtenCount = pb.changeCount
+            DispatchQueue.main.asyncAfter(deadline: .now() + concealedLifetime) {
+                let current = NSPasteboard.general
+                if current.changeCount == writtenCount {
+                    current.clearContents()
+                }
+            }
+        } else {
+            pb.clearContents()
+            pb.setString(text, forType: .string)
+        }
         pasteAfterReactivating(target)
     }
 
