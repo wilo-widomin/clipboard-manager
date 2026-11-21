@@ -19,3 +19,5 @@ Package.resolved
 *.swo
 *~
 .DS_Store?
+# Datos de la red de casa: nunca al repositorio
+docs/local.md
