@@ -170,7 +170,7 @@ final class StatusItemController: NSObject {
         switch item.contentType {
         case .text:
             if let text = item.textContent {
-                PasteboardHelper.copyAndPaste(text: text, reactivating: target)
+                PasteboardHelper.copyAndPaste(text: text, reactivating: target, concealed: item.isProtected)
             }
         case .image:
             if let image = item.loadImage() {
