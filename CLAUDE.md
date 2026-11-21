@@ -19,7 +19,12 @@ macOS menubar app for clipboard history — text & images, favorites, groups.
 - **Resizable popover**: a reserved 8px border on the right/bottom holds drag handles
   (right edge = width, bottom edge = height, corner = both). The size is persisted in
   UserDefaults and drives `preferredContentSize` via `NSHostingController.sizingOptions`.
-- **JSON persistence** via Codable in `~/Library/Application Support/ClipboardManager/store.json`
+- **JSON persistence** via Codable in `~/Library/Application Support/ClipboardManager/store.json`,
+  **cifrado** con AES-256-GCM (CryptoKit) igual que `groups.json` e `images/*`. La `localKey`
+  (32 bytes) vive en el llavero de sesión (servicio fijo `com.widomin.clipboard-manager.local-key`,
+  compartido con Widomin). Formato: `CLPE` + versión + `SealedBox.combined`. Los archivos en claro
+  antiguos se migran en `load()`. Si algo existente no se puede leer, la persistencia se bloquea y
+  no escribe nada (`blockingError`); la app avisa y se cierra. Detalle en `docs/agent-context/arquitectura.md`.
 - **1 Hz polling** of `NSPasteboard.changeCount` for clipboard monitoring
 - **macOS 13+** minimum target
 - **LSUIElement = YES** (agent app, no Dock)
@@ -42,10 +47,13 @@ Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 ├── Monitor/
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
-│   └── JSONPersistenceService.swift  — async JSON read/write (store.json + groups.json)
+│   └── JSONPersistenceService.swift  — async JSON read/write cifrado (store.json + groups.json), migración, bloqueo
 ├── Security/
 │   ├── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min)
-│   └── PasswordGenerator.swift — generador de contraseñas (largo, tipos, símbolos extra)
+│   ├── PasswordGenerator.swift — generador de contraseñas (largo, tipos, símbolos extra)
+│   ├── LocalKey.swift         — `localKey` en el Keychain; nunca crea otra si hay datos cifrados
+│   ├── FileCipher.swift       — AES-256-GCM y formato de archivo cifrado
+│   └── QuickLookTemporaryFiles.swift — copia descifrada temporal (0700) para Quick Look
 └── UI/
     ├── PopoverRootView.swift         — SwiftUI popover: Texto/Imágenes/Grupos + rows
     ├── PopoverActions.swift          — the seam: what each host injects
@@ -95,7 +103,7 @@ live in the status-item right-click menu).
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
 - **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note).
 
@@ -155,8 +163,9 @@ live in the status-item right-click menu).
   editor — go through `ProtectedAccess` (`deviceOwnerAuthentication`: Touch ID or the
   macOS user password) with a **15-minute in-memory grace window**. Inside the editor
   the captured text is a `SecureField`, toggled to a plain editor by the eye button.
-- The gate **hides, it does not encrypt**: the text still lives in clear in
-  `store.json`. Encrypting it at rest is the next step (`docs/05-blueprint-sync-android.md`).
+- The gate **hides, it does not encrypt by itself**: `store.json` is encrypted whole
+  with the `localKey`, but the app reads that key at launch without asking. Tying the
+  protected text to Touch ID with its own key is §3.2 of `docs/05-blueprint-sync-android.md`.
 
 ## Contraseñas creadas a mano
 

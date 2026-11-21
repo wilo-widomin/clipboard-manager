@@ -66,4 +66,7 @@ nativo de clic derecho y la ventana About.
 - Los 8pt de borde derecho/inferior están **reservados** para los handles de resize: si
   una fila se extiende hasta el borde, los dos hover se pelean por el cursor.
 - Quick Look se lanza como proceso externo (`/usr/bin/qlmanage -p`) para no bloquear
-  el popover.
+  el popover. Como las imágenes están cifradas, recibe una copia descifrada de
+  `QuickLookTemporaryFiles` que se borra al terminar el proceso (ver
+  [arquitectura](../arquitectura.md#datos-cifrados-en-disco)). No le pases
+  `imageFileURL`: es el archivo cifrado.
