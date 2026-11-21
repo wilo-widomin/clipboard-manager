@@ -65,4 +65,5 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 
 | Inicio | Fin | Agente | Modelo | Encargo | Resultado |
 |---|---|---|---|---|---|
-| 2026-11-21 15:13 | — | `servidor-sync` | Opus | Repo nuevo `clipboard-sync-server` (local, sin subir): buzón en Rust (axum + SQLite) con cambios cifrados, imágenes, emparejamiento, baja de aparatos, primer arranque y poda; tests de integración; Dockerfile, compose de preproducción detrás de Caddy, guía de despliegue y contrato de la API. Compila y prueba dentro de Docker. | en curso |
+| 2026-11-21 15:13 | 2026-11-21 15:26 | `servidor-sync` | Opus | Repo nuevo `clipboard-sync-server` (local, sin subir): buzón en Rust (axum + SQLite) con cambios cifrados, imágenes, emparejamiento, baja de aparatos, primer arranque y poda; tests de integración; Dockerfile, compose de preproducción detrás de Caddy, guía de despliegue y contrato de la API. Compila y prueba dentro de Docker. | Hecho: 26 tests en verde dentro de Docker; imagen de 11 MB que arranca. Sin subir (falta crear el repositorio en GitHub). |
+| 2026-11-21 15:26 | — | `revision-servidor` | Opus | Revisión de seguridad del servidor: tokens, emparejamiento, poda, límites y despliegue. Solo lectura. | en curso |
