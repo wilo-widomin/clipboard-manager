@@ -70,11 +70,11 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
 
 - La ventana es propia, no una sheet ni una vista dentro del popover: al tomar el foco,
   cerraría el popover (que se cierra con el monitor global de clic-fuera).
-- **La autenticación esconde, no cifra.** El texto de un item protegido sigue en
-  claro en `store.json`: quien abra el archivo lo lee sin pasar por Touch ID. Por eso
-  se quitó una primera versión del gate; ahora vuelve porque el usuario lo pidió
-  explícitamente para ocultar contenido a quien mire la pantalla. Cifrarlo en disco
-  es el paso siguiente (`docs/05-blueprint-sync-android.md`).
+- **La autenticación esconde, no cifra por sí misma.** `store.json` va cifrado entero
+  con la `localKey` (ver [arquitectura](../arquitectura.md#datos-cifrados-en-disco)),
+  pero esa llave la lee la app sin pedir nada al arrancar: el texto protegido no lleva
+  un cifrado propio atado a Touch ID. Eso es el §3.2 de
+  `docs/05-blueprint-sync-android.md`, aún sin hacer.
 - El tooltip de la nota (`DetailIndicator`) **no** se enseña en un item protegido:
   el candado no valdría de nada si el globo de ayuda cantara la nota.
 - El editor se abre vía `PopoverActions.editDetail` (necesita AppKit), pero el guardado

@@ -113,6 +113,11 @@ public final class ClipboardStore: ObservableObject {
 
     private let persistence: PersistenceService
 
+    /// `false` hasta que `load()` o `adoptInitialState` han puesto en memoria
+    /// lo que había en disco. Mientras tanto no se persiste nada: guardar la
+    /// lista a medio cargar sobrescribiría el archivo con menos items.
+    private var hasLoadedFromDisk = false
+
     public init(persistence: PersistenceService) {
         self.persistence = persistence
         // Restore persisted view mode preference.
@@ -135,10 +140,12 @@ public final class ClipboardStore: ObservableObject {
         // Enforce the per-type limits on load too, so a store that grew past
         // the limit under an older build (or a lowered limit) is normalised.
         items = capAllTypes(sort(loaded))
+        hasLoadedFromDisk = true
     }
 
     public func adoptInitialState(_ loaded: [ClipboardItem]) {
         items = capAllTypes(sort(loaded))
+        hasLoadedFromDisk = true
     }
 
     // MARK: - Mutations
@@ -186,10 +193,12 @@ public final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Reads an image item's bytes from disk for content comparison.
+    /// Reads an image item's bytes from disk for content comparison, ya
+    /// descifrados: el archivo cifrado lleva un nonce aleatorio, así que dos
+    /// copias de la misma imagen nunca son iguales byte a byte en disco.
     private func imageBytes(_ item: ClipboardItem) -> Data? {
-        guard let url = item.imageFileURL else { return nil }
-        return try? Data(contentsOf: url)
+        guard let filename = item.imageFilename else { return nil }
+        return ImageStorage.readData(filename: filename)
     }
 
     /// Removes an item from the list and deletes its image file, without
@@ -454,6 +463,7 @@ public final class ClipboardStore: ObservableObject {
     // MARK: - Persistence
 
     private func persist() {
+        guard hasLoadedFromDisk else { return }
         let snapshot = items
         Task { [persistence] in
             do {
@@ -465,6 +475,7 @@ public final class ClipboardStore: ObservableObject {
     }
 
     private func persistGroups() {
+        guard hasLoadedFromDisk else { return }
         let snapshot = groups
         Task { [persistence] in
             do {

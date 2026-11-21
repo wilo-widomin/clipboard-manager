@@ -1,11 +1,13 @@
 ---
 dominio: historial
-actualizado: 2026-11-12
+actualizado: 2026-11-21
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
   - Sources/ClipboardManagerKit/Monitor/ClipboardMonitor.swift
   - Sources/ClipboardManagerKit/Persistence/JSONPersistenceService.swift
+  - Sources/ClipboardManagerKit/Security/FileCipher.swift
+  - Sources/ClipboardManagerKit/Security/LocalKey.swift
 depende_de: [grupos/_dominio]
 ---
 
@@ -22,7 +24,12 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
   `detail?`. `groupID` y `detail` son opcionales con default para que un `store.json`
   viejo decodifique: **cualquier campo nuevo debe seguir esa regla**.
 - `ImageStorage` (mismo archivo) — carpeta `…/ClipboardManager/images`; `delete` exige
-  nombre pelado (rechaza `/`, anti-traversal).
+  nombre pelado (rechaza `/`, anti-traversal). `write` cifra y escribe, `readData`
+  descifra (o devuelve tal cual un PNG en claro aún sin migrar) y `loadImage` lo
+  convierte en `NSImage` con una caché en memoria por nombre de archivo.
+- Persistencia (`JSONPersistenceService`) — `store.json` y `groups.json` cifrados
+  con AES-256-GCM; migra el formato en claro y se bloquea si algo existente no se
+  puede leer. El detalle está en [arquitectura](../arquitectura.md#datos-cifrados-en-disco).
 - `ClipboardStore` — `@Published items` + `groups`, `viewMode` (persistido en
   UserDefaults), `visibleItems` (filtra por vista, por grupo **y** por el buscador —
   `passes(_:)` = `passesGroupFilter` + `matchesSearch`).
@@ -40,7 +47,8 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
   PNG del disco. Es la única forma de no dejar basura en `images/`.
 - Des-favoritar limpia `groupID` (pertenecer a un grupo implica ser favorito).
 - Cada mutación pública persiste; `purge` es la excepción privada (no persiste, lo
-  hace quien la llama).
+  hace quien la llama). Hasta que `load()` o `adoptInitialState` terminan, `persist`
+  y `persistGroups` no hacen nada: guardar antes pisaría el archivo con menos items.
 
 - Hay **dos entradas** de items: `add` (lo captura el monitor; deduplica) y `addManual`
   (el modal «Nueva contraseña»; ver [edicion-item](../edicion-item/_dominio.md)). Este
@@ -61,6 +69,9 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - Des-favoritar **no** re-aplica el cap: el item pasa a competir por el cupo y caerá
   en el siguiente `add` si es el más viejo. A propósito — quitarle la estrella no debe
   hacerlo desaparecer de golpe delante del usuario.
+- La deduplicación de imágenes compara los bytes **descifrados**
+  (`ImageStorage.readData`). En disco dos copias de la misma imagen nunca coinciden:
+  cada escritura lleva un nonce aleatorio.
 - `add` deduplica por contenido y **hereda `isFavorite`, `groupID` y `detail`** del
   duplicado que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el
   monitor re-lee) le borraba el grupo y la nota escrita en el editor.

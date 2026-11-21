@@ -44,24 +44,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = ClipboardStore(persistence: persistence)
         self.store = store
 
-        // Load persisted state.
-        Task {
-            await store.load()
-        }
-
         // Install the status item.
         let controller = StatusItemController(store: store)
         self.statusItemController = controller
         self.monitor = ClipboardMonitor(store: store)
 
-        // Start the 1 Hz tick for clipboard monitoring. The popover UI is SwiftUI
-        // bound to the store's @Published state, so it refreshes automatically
-        // when the monitor adds items — no manual menu rebuild needed.
+        // Load persisted state. Hasta que no se ha leído (y descifrado) lo que
+        // hay en disco no se empieza a capturar: si los datos no se pueden
+        // abrir, la app avisa y se cierra sin escribir nada.
+        Task {
+            await store.load()
+            if let error = persistence.blockingError {
+                self.stopBecauseDataIsUnreadable(error)
+                return
+            }
+            self.startMonitoring()
+        }
+    }
+
+    /// Start the 1 Hz tick for clipboard monitoring. The popover UI is SwiftUI
+    /// bound to the store's @Published state, so it refreshes automatically
+    /// when the monitor adds items — no manual menu rebuild needed.
+    private func startMonitoring() {
         tickTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.monitor?.tick()
             }
         }
+    }
+
+    /// Los archivos existen pero no se pueden leer (sin llave en el Llavero,
+    /// aviso del Llavero rechazado, descifrado que falla, JSON roto). La
+    /// persistencia ya ha bloqueado toda escritura; aquí se explica y se sale,
+    /// para que Willy no trabaje con un historial vacío creyendo que lo ha
+    /// perdido.
+    private func stopBecauseDataIsUnreadable(_ error: Error) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "No se puede abrir el historial"
+        alert.informativeText = """
+            Clipboard Manager no ha podido leer sus datos y se va a cerrar sin \
+            tocarlos, para no perder nada.
+
+            \(error.localizedDescription)
+
+            Los archivos siguen en ~/Library/Application Support/ClipboardManager. \
+            Si el Llavero ha pedido permiso y lo has rechazado, vuelve a abrir la \
+            app y pulsa «Permitir siempre».
+            """
+        alert.addButton(withTitle: "Salir")
+        alert.runModal()
+        NSApp.terminate(nil)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

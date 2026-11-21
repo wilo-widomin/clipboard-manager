@@ -3,8 +3,8 @@
 //  ClipboardManager
 //
 //  Model for a single clipboard entry: text or image, with favorites support.
-//  Images are stored as individual .png files on disk; the model only keeps
-//  the filename reference.
+//  Images are stored as individual files on disk, cifrados con la `localKey`
+//  (ver `FileCipher`); the model only keeps the filename reference.
 //
 
 import Foundation
@@ -102,18 +102,21 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
 
     // MARK: - Image loading
 
-    /// Returns the full file URL for this item's image, if it is an image item.
+    /// URL del archivo de la imagen en disco. **Está cifrado**: no sirve para
+    /// abrirlo con otra app ni con Quick Look. Para leer los bytes usa
+    /// `ImageStorage.readData(filename:)`; para Quick Look,
+    /// `QuickLookTemporaryFiles.makePlainCopy(ofImage:)`.
     public var imageFileURL: URL? {
         guard let filename = imageFilename else { return nil }
         return ImageStorage.directoryURL?.appendingPathComponent(filename)
     }
 
-    /// Loads the image from disk. Returns nil if the file doesn't exist or is
-    /// not a valid image. The original file size is preserved; callers scale
-    /// for display as needed.
+    /// Carga la imagen ya descifrada. `nil` si el archivo no existe, no se
+    /// puede descifrar o no es una imagen válida. The original file size is
+    /// preserved; callers scale for display as needed.
     public func loadImage() -> NSImage? {
-        guard let url = imageFileURL else { return nil }
-        return NSImage(contentsOf: url)
+        guard let filename = imageFilename else { return nil }
+        return ImageStorage.loadImage(filename: filename)
     }
 
     // MARK: - Factory
@@ -130,15 +133,16 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
         )
     }
 
-    /// Creates an image clipboard item. The PNG data is saved to disk; the
-    /// model stores only the filename.
+    /// Creates an image clipboard item. The PNG data is saved to disk,
+    /// cifrada; the model stores only the filename. Si no se puede cifrar (sin
+    /// llave), no se escribe nada —nunca en claro— y la fila sale sin miniatura.
     public static func image(pngData: Data) -> ClipboardItem {
         let id = UUID()
         let filename = "\(id.uuidString).png"
-        // Save to disk (best-effort).
-        if let dir = ImageStorage.directoryURL {
-            let fileURL = dir.appendingPathComponent(filename)
-            try? pngData.write(to: fileURL, options: .atomic)
+        do {
+            try ImageStorage.write(pngData: pngData, filename: filename)
+        } catch {
+            NSLog("ClipboardManager: no se pudo guardar la imagen cifrada: \(error.localizedDescription)")
         }
         return ClipboardItem(
             id: id,
@@ -176,8 +180,16 @@ extension ClipboardItem {
     }
 }
 
-/// Manages the images directory on disk.
+/// Manages the images directory on disk. Cada archivo va cifrado con
+/// `FileCipher`; los PNG en claro de versiones anteriores se siguen leyendo
+/// hasta que `JSONPersistenceService.load()` los migra.
 public enum ImageStorage {
+
+    /// Imágenes ya descifradas, por nombre de archivo. Los archivos no cambian
+    /// nunca (el nombre es un UUID nuevo por imagen), así que la caché solo se
+    /// invalida al borrar. Evita descifrar cada miniatura en cada repintado.
+    private static let decodedImages = NSCache<NSString, NSImage>()
+
     /// URL of the images directory, creating it if needed.
     public static var directoryURL: URL? {
         let appSupport = FileManager.default.urls(
@@ -195,7 +207,48 @@ public enum ImageStorage {
         guard let dir = directoryURL else { return }
         // Basic path sanitisation: ensure no directory separators.
         guard !filename.contains("/") else { return }
+        decodedImages.removeObject(forKey: filename as NSString)
         let fileURL = dir.appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    /// Cifra los bytes de la imagen y los escribe de forma atómica. Lanza si
+    /// no hay llave o no se puede escribir; nunca deja el PNG en claro.
+    public static func write(pngData: Data, filename: String) throws {
+        guard let dir = directoryURL else { throw CocoaError(.fileNoSuchFile) }
+        guard !filename.contains("/") else { throw CocoaError(.fileWriteInvalidFileName) }
+        let key = try LocalKey.shared.key()
+        let sealed = try FileCipher.seal(pngData, using: key)
+        try sealed.write(to: dir.appendingPathComponent(filename), options: .atomic)
+    }
+
+    /// Bytes de la imagen ya descifrados. Un archivo en claro de una versión
+    /// anterior (aún sin migrar) se devuelve tal cual. `nil` si no existe o no
+    /// se puede descifrar.
+    public static func readData(filename: String) -> Data? {
+        guard let dir = directoryURL, !filename.contains("/") else { return nil }
+        guard let raw = try? Data(contentsOf: dir.appendingPathComponent(filename)) else {
+            return nil
+        }
+        guard FileCipher.isEncrypted(raw) else { return raw }
+        do {
+            let key = try LocalKey.shared.key()
+            return try FileCipher.open(raw, using: key)
+        } catch {
+            NSLog("ClipboardManager: no se pudo descifrar la imagen \(filename): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// La imagen descifrada como `NSImage`, desde la caché si ya se leyó.
+    public static func loadImage(filename: String) -> NSImage? {
+        if let cached = decodedImages.object(forKey: filename as NSString) {
+            return cached
+        }
+        guard let data = readData(filename: filename), let image = NSImage(data: data) else {
+            return nil
+        }
+        decodedImages.setObject(image, forKey: filename as NSString)
+        return image
     }
 }

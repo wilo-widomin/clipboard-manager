@@ -185,14 +185,23 @@ final class StatusItemController: NSObject {
         DetailEditorWindowController.show(item: item, store: store)
     }
 
+    /// La imagen está cifrada en disco: Quick Look recibe una copia descifrada
+    /// en una carpeta temporal privada, que se borra cuando `qlmanage` termina
+    /// (al cerrar la vista rápida) o, si no, en el siguiente arranque.
     private func quickLook(_ item: ClipboardItem) {
-        guard let url = item.imageFileURL else { return }
+        guard let filename = item.imageFilename,
+              let url = QuickLookTemporaryFiles.makePlainCopy(ofImage: filename)
+        else { return }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/qlmanage")
         process.arguments = ["-p", url.path]
+        process.terminationHandler = { _ in
+            QuickLookTemporaryFiles.remove(url)
+        }
         do {
             try process.run()
         } catch {
+            QuickLookTemporaryFiles.remove(url)
             NSLog("ClipboardManager: failed to open Quick Look: \(error)")
         }
     }
