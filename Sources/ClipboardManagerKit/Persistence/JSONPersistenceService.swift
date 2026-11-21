@@ -36,6 +36,40 @@ public protocol PersistenceService: Sendable {
     /// los archivos siguen intactos en disco: `ClipboardStore` deja de añadir y
     /// de guardar, y el anfitrión debe avisar y no seguir capturando.
     var blockingError: Error? { get }
+
+    /// Encola el guardado de los items **sin esperar** y respetando el orden de
+    /// llamada: dos guardados seguidos llegan al disco en el mismo orden en que
+    /// se pidieron, así que una foto vieja nunca pisa a una nueva. Los errores
+    /// solo se registran. Es lo que usa `ClipboardStore` desde el hilo
+    /// principal.
+    func enqueueSave(_ items: [ClipboardItem])
+    /// Lo mismo que `enqueueSave(_:)` para los grupos.
+    func enqueueSaveGroups(_ groups: [ClipboardGroup])
+}
+
+/// Implementación por defecto para servicios escritos antes de existir
+/// `enqueueSave`: llama al `save` asíncrono en una `Task`. **No** garantiza el
+/// orden; un servicio con una cola propia debe sobrescribirla.
+public extension PersistenceService {
+    func enqueueSave(_ items: [ClipboardItem]) {
+        Task {
+            do {
+                try await save(items)
+            } catch {
+                NSLog("ClipboardManager: failed to persist: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func enqueueSaveGroups(_ groups: [ClipboardGroup]) {
+        Task {
+            do {
+                try await saveGroups(groups)
+            } catch {
+                NSLog("ClipboardManager: failed to persist groups: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 /// Errores propios de la persistencia.
@@ -176,6 +210,19 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
         }
     }
 
+    /// Encola la escritura en la cola serie **ya**, en el hilo de quien llama:
+    /// el orden de las llamadas es el orden de las escrituras.
+    public func enqueueSave(_ items: [ClipboardItem]) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.writeFile(self.fileURL, value: items)
+            } catch {
+                NSLog("ClipboardManager: failed to persist: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Groups
 
     public func loadGroups() async -> [ClipboardGroup] {
@@ -208,6 +255,18 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
                 } catch {
                     continuation.resume(throwing: error)
                 }
+            }
+        }
+    }
+
+    /// Lo mismo que `enqueueSave(_:)` para los grupos.
+    public func enqueueSaveGroups(_ groups: [ClipboardGroup]) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.writeFile(self.groupsURL, value: groups)
+            } catch {
+                NSLog("ClipboardManager: failed to persist groups: \(error.localizedDescription)")
             }
         }
     }

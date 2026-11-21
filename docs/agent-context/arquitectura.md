@@ -189,8 +189,11 @@ el item lleva `textContent = nil` y el texto en `sealedText`. Solo
   dormido, y comprobación en cada `isUnlocked`) se olvida.
 - **Nunca se pierde texto**: no se crea un par nuevo si ya hay algún `sealedText`
   (`keyMissingButSealedTextExists`); no se cifra hacia una pública cuya privada no
-  aparece en ningún llavero (comprobado solo con atributos, sin pedir el dedo); el par
-  se crea privada primero y pública después, y se relee la pública. Si no hay llave, no
+  aparece en ningún llavero (comprobado solo con atributos, sin pedir el dedo), ni
+  hacia una que no es la pareja de la privada: la privada lleva su pública apuntada en
+  `kSecAttrGeneric` y, si no casa, `publicKeyMismatch` (sin el atributo, de una build
+  anterior, se acepta); al desbloquear la privada se compara también su pública
+  derivada. El par se crea privada primero y pública después, y se relee la pública. Si no hay llave, no
   se protege ni se crea nada protegido, y la migración deja el texto como estaba.
 - **Migración**: `ClipboardStore.adoptInitialState` (también vía `load()`) cifra en
   memoria los items protegidos con texto en claro y escribe una vez con `persist()`
@@ -231,8 +234,11 @@ Esa es la costura entre anfitriones, y hay solo dos cosas que varían:
 
 ## Convenciones
 
-- Todo lo de UI y el store son `@MainActor`; la persistencia es `async` sobre una
-  `DispatchQueue` propia con escritura `.atomic`.
+- Todo lo de UI y el store son `@MainActor`; la persistencia va sobre una
+  `DispatchQueue` serie propia con escritura atómica. El store guarda con
+  `enqueueSave` / `enqueueSaveGroups`, que encolan en esa cola desde el hilo
+  principal sin `Task`, para que las escrituras salgan en el orden de los cambios; el
+  `save` asíncrono sigue para compatibilidad.
 - Los ficheros del proyecto se descubren por `fileSystemSynchronizedGroups`: añadir o
   borrar un `.swift` bajo `src/` o bajo `Sources/ClipboardManagerKit/` **no requiere
   tocar el `.pbxproj`**.

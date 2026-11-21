@@ -103,8 +103,8 @@ final class ProtectedKey: @unchecked Sendable {
     /// pide autenticación.
     ///
     /// Antes de devolver una pública ya guardada comprueba que su privada sigue
-    /// en el Llavero: cifrar hacia una llave cuya privada se ha perdido sería
-    /// tirar el texto.
+    /// en el Llavero y que es **la suya**: cifrar hacia una llave cuya privada
+    /// se ha perdido (o ha sido sustituida por otra) sería tirar el texto.
     func publicKey(sealedTextExists: Bool) throws -> Curve25519.KeyAgreement.PublicKey {
         lock.lock()
         defer { lock.unlock() }
@@ -113,7 +113,7 @@ final class ProtectedKey: @unchecked Sendable {
             return cached
         }
         if let stored = try readPublicKey() {
-            guard try privateKeyExists() else { throw ProtectedKeyError.privateKeyMissing }
+            guard try privateKeyExists(matching: stored) else { throw ProtectedKeyError.privateKeyMissing }
             cachedPublicKey = stored
             return stored
         }
@@ -158,6 +158,12 @@ final class ProtectedKey: @unchecked Sendable {
         // el hilo principal no debe bloquearse por pedir la pública.
         guard let key = try readPrivateKey(context: context, reason: reason) else {
             return nil
+        }
+        // La privada tiene que ser la pareja de la pública con la que se cifra.
+        // Si no hay pública guardada no se ha cifrado nada con ninguna: se acepta.
+        if let stored = try readPublicKey(),
+           stored.rawRepresentation != key.publicKey.rawRepresentation {
+            throw ProtectedKeyError.publicKeyMismatch
         }
         lock.lock()
         defer { lock.unlock() }
@@ -250,8 +256,16 @@ final class ProtectedKey: @unchecked Sendable {
     }
 
     /// Comprueba que la privada existe **sin pedir autenticación**: solo
-    /// atributos, nunca los datos.
-    private func privateKeyExists() throws -> Bool {
+    /// atributos, nunca los datos, y con un `LAContext` que no permite
+    /// interacción (si el sistema quisiera preguntar, devuelve
+    /// `errSecInteractionNotAllowed` en vez de enseñar nada).
+    ///
+    /// Además compara la pública que la privada lleva apuntada en
+    /// `kSecAttrGeneric` con `publicKey`, y lanza `.publicKeyMismatch` si no
+    /// casan. Pasa cuando la app suelta y Widomin crean el par a la vez la
+    /// primera vez: el segundo puede sustituir la privada del primero mientras
+    /// la pública guardada sigue siendo la del primero.
+    private func privateKeyExists(matching publicKey: Curve25519.KeyAgreement.PublicKey) throws -> Bool {
         let silent = LAContext()
         silent.interactionNotAllowed = true
 
@@ -263,8 +277,11 @@ final class ProtectedKey: @unchecked Sendable {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(protected as CFDictionary, &result)
         switch status {
-        case errSecSuccess, errSecInteractionNotAllowed:
+        case errSecSuccess:
+            try checkStoredPublicKey(in: result, against: publicKey)
             return true
+        case errSecInteractionNotAllowed:
+            return true  // existe, pero sin atributos que comparar
         case errSecItemNotFound, errSecMissingEntitlement:
             break
         default:
@@ -279,11 +296,25 @@ final class ProtectedKey: @unchecked Sendable {
         let loginStatus = SecItemCopyMatching(login as CFDictionary, &result)
         switch loginStatus {
         case errSecSuccess:
+            try checkStoredPublicKey(in: result, against: publicKey)
             return true
         case errSecItemNotFound:
             return false
         default:
             throw ProtectedKeyError.keychainRead(loginStatus)
+        }
+    }
+
+    /// Compara la pública apuntada en la privada (`kSecAttrGeneric`) con la
+    /// guardada. Una privada sin ese atributo se creó con una build anterior
+    /// que no lo escribía: no se sabe, y se acepta para no romper nada.
+    private func checkStoredPublicKey(in attributes: CFTypeRef?,
+                                      against publicKey: Curve25519.KeyAgreement.PublicKey) throws {
+        guard let dict = attributes as? [String: Any],
+              let recorded = dict[kSecAttrGeneric as String] as? Data
+        else { return }
+        guard recorded == publicKey.rawRepresentation else {
+            throw ProtectedKeyError.publicKeyMismatch
         }
     }
 
@@ -293,9 +324,9 @@ final class ProtectedKey: @unchecked Sendable {
     /// siguiente intento (nada se había cifrado aún con ella).
     private func createKeyPair() throws -> Curve25519.KeyAgreement.PublicKey {
         let privateKey = Curve25519.KeyAgreement.PrivateKey()
-        try storePrivateKey(privateKey.rawRepresentation)
-
         let publicData = privateKey.publicKey.rawRepresentation
+        try storePrivateKey(privateKey.rawRepresentation, publicData: publicData)
+
         var attributes = baseQuery(account: ProtectedKey.publicKeyAccount, dataProtection: false)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         attributes[kSecAttrLabel as String] = "Clipboard Manager — llave pública de elementos protegidos"
@@ -319,7 +350,10 @@ final class ProtectedKey: @unchecked Sendable {
 
     /// Guarda la privada con presencia obligatoria en el llavero de protección
     /// de datos; si esta build no tiene el entitlement, en el de sesión.
-    private func storePrivateKey(_ keyData: Data) throws {
+    /// En los dos casos apunta su pública en `kSecAttrGeneric` (no es secreta)
+    /// para poder comprobar después, sin autenticar, que la pública guardada
+    /// es su pareja.
+    private func storePrivateKey(_ keyData: Data, publicData: Data) throws {
         var error: Unmanaged<CFError>?
         if let access = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
@@ -330,6 +364,7 @@ final class ProtectedKey: @unchecked Sendable {
             var attributes = baseQuery(account: ProtectedKey.privateKeyAccount, dataProtection: true)
             attributes[kSecAttrAccessControl as String] = access
             attributes[kSecAttrLabel as String] = "Clipboard Manager — llave de elementos protegidos"
+            attributes[kSecAttrGeneric as String] = publicData
             attributes[kSecValueData as String] = keyData
 
             let status = addReplacingLeftover(attributes,
@@ -349,6 +384,7 @@ final class ProtectedKey: @unchecked Sendable {
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         attributes[kSecAttrLabel as String] = "Clipboard Manager — llave de elementos protegidos"
         attributes[kSecAttrDescription as String] = "Descifra el texto de los elementos protegidos"
+        attributes[kSecAttrGeneric as String] = publicData
         attributes[kSecValueData as String] = keyData
 
         let status = addReplacingLeftover(attributes,

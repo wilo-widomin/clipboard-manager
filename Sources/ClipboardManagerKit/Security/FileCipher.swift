@@ -65,11 +65,11 @@ enum FileCipher {
     /// Cifra `plaintext` con un nonce aleatorio nuevo y devuelve el archivo
     /// completo, cabecera incluida.
     static func seal(_ plaintext: Data, using key: SymmetricKey) throws -> Data {
-        let header = header()
+        let head = Self.header()
         // Sin `nonce:` CryptoKit genera uno aleatorio de 12 bytes en cada llamada.
-        let box = try AES.GCM.seal(plaintext, using: key, authenticating: header)
+        let box = try AES.GCM.seal(plaintext, using: key, authenticating: head)
         guard let combined = box.combined else { throw FileCipherError.sealFailed }
-        var output = header
+        var output = head
         output.append(combined)
         return output
     }
