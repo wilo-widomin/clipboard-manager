@@ -19,6 +19,12 @@ para lo que toca cifrado o puede perder datos; Fable si alguna tarea lo pide.
 | 2026-11-21 12:16 | 2026-11-21 12:21 | `revision-seguridad-2` | Opus | Revisión final de todo junto (§3.1, §3.2, §3.3 y arreglos), sobre todo errores de compilación. Solo lectura. | Nada grave. Tres puntos menores: una línea que quizá no compile, un caso raro en que se perdería texto protegido si la app y Widomin crean la llave a la vez, y dos guardados seguidos que podrían llegar desordenados. |
 | 2026-11-21 12:21 | 2026-11-21 12:23 | `arreglos-revision-2` | Opus | Arreglar los tres puntos de `revision-seguridad-2`. Rama propia. | Hecho y mezclado; sin compilar. Si la app y Widomin crean la llave a la vez, ahora se detecta y no se cifra nada más hacia la llave huérfana (lo cifrado en ese instante no se recupera). |
 | 2026-11-21 12:24 | 2026-11-21 12:24 | (sesión principal) | Opus | Subir todo a GitHub para que Willy compile en el Mac. | Subido. |
+
+## Fallo en la primera prueba de Willy
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-21 13:22 | 2026-11-21 13:26 | `diagnostico-protegidos` | Opus | Willy ve los items protegidos sin proteger y sin título tras instalar la versión nueva. Encontrar la causa, decir si los datos se pueden recuperar y cómo. Solo lectura. | El código nuevo no pierde esos campos. Causa probable: una versión vieja de la app (anterior a los protegidos) reescribió `store.json` antes de migrar, como sospechaba Willy. Se recupera desde la copia del escritorio, que conserva los 28. |
 | 2026-11-21 11:53 | 2026-11-21 12:01 | `revision-seguridad-1` | Opus | Revisión de seguridad y de errores de compilación de §3.1 y §3.3 ya mezclados. Solo lectura. | Ningún error de compilación seguro. Un riesgo confirmado: una versión vieja de la app abierta después de la migración borraría el historial cifrado. Cuatro riesgos probables de pérdida de datos y uno de seguridad. Lo arregla `arreglos-revision` cuando termine `touchid-llave`, porque tocan los mismos archivos. |
 | 2026-11-21 11:53 | 2026-11-21 11:54 | `docs-desfasados` | Haiku | Corregir tres frases que quedaron falsas: README (líneas 64 y 70), paso 5 de `historial/capturar-item.md` y el «Estado» del plan. Instrucciones exactas. Rama propia. | Hecho y mezclado. Detectó que su rama partía de una versión vieja (fallo mío, ver nota). Al cambiar el «Estado» se comió una fecha; la recuperé a mano. |
 
@@ -26,3 +32,6 @@ para lo que toca cifrado o puede perder datos; Fable si alguna tarea lo pide.
 la `main` local. `touchid-llave` arrancó sin §3.1 ni §3.3; le he avisado para que
 mezcle `main` antes de seguir. A partir de ahora, cada encargo empieza con
 `git merge main`.
+
+**Resuelto (2026-11-21):** Willy estaba viendo la lista de una versión vieja de la app
+que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
