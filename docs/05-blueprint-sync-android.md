@@ -1,6 +1,6 @@
 # Blueprint — Sincronización cifrada entre Mac, Android y Linux
 
-> Estado: **diseño**, nada implementado. Primera versión cerrada el 21-08-2026;
+> Estado: §3.1 (archivo cifrado entero) y §3.3 (marca de secreto en el portapapeles) implementados el 21-11-2026, pendientes de probar en el Mac; el resto, diseño.
 > **revisada entera con Willy el 17-11-2026**, pensando solo en la seguridad.
 > Los identificadores van en inglés porque acabarán siendo código; la prosa, en castellano.
 
