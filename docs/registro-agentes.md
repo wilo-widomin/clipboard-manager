@@ -35,3 +35,10 @@ mezcle `main` antes de seguir. A partir de ahora, cada encargo empieza con
 
 **Resuelto (2026-11-21):** Willy estaba viendo la lista de una versión vieja de la app
 que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
+
+## Fallos de la prueba a mano (2026-11-21)
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-21 13:45 | 2026-11-21 13:45 | `gestores-contrasenas` | Sonnet | Lo copiado desde el llavero de Apple sigue entrando en la lista: no capturar nada cuando la app de delante es un gestor de contraseñas (Acceso a Llaveros, Contraseñas, 1Password…). Solo `ClipboardMonitor.swift`. Rama propia. | Hecho y mezclado; sin compilar. Lista de 18 gestores; algunos identificadores sin confirmar (si no existen, no hacen nada). |
+| 2026-11-21 13:45 | 2026-11-21 13:45 | `ventana-editor` | Sonnet | La ventana del editor no vuelve al frente al hacer clic derecho otra vez, y abrir un item ya abierto crea otra pestaña. Reutilizar la ventana de ese item y traerla delante. Rama propia. | Hecho y mezclado; sin compilar. No había un arreglo anterior perdido. Las ventanas ya no se agrupan en pestañas. |
