@@ -53,3 +53,9 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 | 2026-11-21 13:52 | 2026-11-21 14:06 | `modelo-sincronizable` | Opus | Mac (§6): identificador de aparato, fecha y aparato por cada campo, borrados marcados para lo que se sincroniza, huella de las imágenes, la regla de fusión y sus casos de prueba compartidos. Sin red. Rama propia. | Hecho en su rama; sin compilar. Los casos de prueba los comprobó con una versión aparte en Python. Pendiente de revisión. |
 | 2026-11-21 14:06 | 2026-11-21 14:11 | `revision-modelo` | Opus | Revisar la rama del modelo sincronizable antes de mezclarla: compilación, datos reales y regla de fusión. Solo lectura. | Sin errores de compilación a la vista; casos de prueba correctos. Dos problemas: las marcas de borrado en el mismo archivo romperían una versión vieja o Widomin; y texto y protección se mezclaban por separado. |
 | 2026-11-21 14:11 | 2026-11-21 14:16 | `arreglos-modelo` | Opus | Arreglar los dos problemas de `revision-modelo` en la misma rama. | Hecho y mezclado en `main`; sin compilar. Borrados en archivos aparte; texto y protección viajan juntos. 18 casos de prueba comprobados con la versión en Python. |
+
+## Fallo en la prueba del modelo sincronizable (2026-11-21)
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-21 14:30 | 2026-11-21 14:31 | `proteger-es-favorito` | Sonnet | Proteger un item del historial desde el editor ya no lo marca como favorito (antes sí). Encontrar dónde se perdió, devolverlo y añadir un test. Rama propia. | Hecho y mezclado; sin compilar. No encontró en el historial del código dónde se hacía antes. Ahora proteger marca favorito; desproteger no quita la estrella. Test nuevo. |
