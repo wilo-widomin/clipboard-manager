@@ -38,7 +38,10 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
   descifra (o devuelve tal cual un PNG en claro aún sin migrar) y `loadImage` lo
   convierte en `NSImage` con una caché en memoria por nombre de archivo.
 - Persistencia (`JSONPersistenceService`) — `store.enc` y `groups.enc` cifrados
-  con AES-256-GCM; funde en ellos un `store.json`/`groups.json` antiguo (en claro o no) y se bloquea si algo existente no se
+  con AES-256-GCM, y los tombstones aparte en `item-tombstones.enc` y
+  `group-tombstones.enc` (`loadTombstones`, `enqueueSaveItemTombstones`,
+  `enqueueSaveGroupTombstones`; en el protocolo tienen implementaciones por defecto
+  que no hacen nada); funde en ellos un `store.json`/`groups.json` antiguo (en claro o no) y se bloquea si algo existente no se
   puede leer. El detalle está en [arquitectura](../arquitectura.md#datos-cifrados-en-disco).
 - `ClipboardStore` — `@Published items` + `groups` (solo lo vivo),
   `itemTombstones` + `groupTombstones` (lo borrado), `deviceId`, `viewMode` (persistido en
@@ -80,8 +83,8 @@ que lo use todavía salvo los tests.
   historial. `ClipboardStore(persistence:deviceId:)` lo acepta fijo (tests); si no,
   lo lee la primera vez que hace falta una marca.
 - **Marcas por campo** (`SyncStamp`, `ItemFieldStamps`): `(updatedAt, deviceId)` para
-  `content` (`textContent` + `sealedText`, un solo campo), `detail`, `title`,
-  `favorite`, `protection` y `group`; en grupos, `nameStamp`. `updatedAt` va en
+  `content` (`textContent` + `sealedText` + `isProtected`, un solo campo), `detail`,
+  `title`, `favorite`, `protection` (solo informativa) y `group`; en grupos, `nameStamp`. `updatedAt` va en
   milisegundos enteros. Cada mutación del store marca **solo los campos que cambian
   de verdad** (`toggleFavorite`, `setText`/`setTextContent`, `setDetail`,
   `assignGroup`, `deleteGroup` en los items del grupo, `renameGroup`). Un item nuevo
@@ -97,11 +100,18 @@ que lo use todavía salvo los tests.
   `remove`, el tope (`cap`) y los vaciados, todo por `retire(_:)`. El historial que
   nunca fue favorito se borra de verdad, como siempre. Borrar un grupo siempre deja
   tombstone (todos los grupos se sincronizan).
-- **Los tombstones no están en `items` ni en `groups`**: viven aparte y solo se juntan
-  al guardar (`persist` escribe `items + itemTombstones`). `adoptInitialState` y
-  `load()` los vuelven a separar; si un `id` está vivo y borrado, gana el borrado.
-  Por eso vistas, recuentos, topes, buscador, deduplicación y filtro de grupos no los
-  ven sin tener que filtrar nada.
+- **Los tombstones no están en `items` ni en `groups`, ni en `store.enc`/`groups.enc`**:
+  viven en `item-tombstones.enc` / `group-tombstones.enc`. `persist`/`persistGroups`
+  escriben su archivo solo si han cambiado (`itemTombstonesDirty`) y **antes** que el
+  de los vivos: si la app muere entre las dos escrituras queda un `id` vivo y borrado,
+  y al cargar gana el borrado. `load()` los lee con `loadTombstones()`; si aún vienen
+  mezclados con los vivos (los escribió una build anterior de esta rama), los aparta,
+  los suma a los de su archivo y reescribe los dos. Por eso vistas, recuentos, topes,
+  buscador, deduplicación y filtro de grupos no los ven sin tener que filtrar nada.
+- **Un archivo de tombstones que no se puede leer bloquea** igual que `store.enc`: no se
+  escribe nada. `load()` y `loadGroups()` leen antes su archivo de tombstones, y la
+  fusión con un `store.json`/`groups.json` heredado da sus `id` por conocidos
+  (`loadMerging(alsoKnown:)`): lo borrado aquí no resucita desde el archivo viejo.
 - **Quitar la estrella**: el item sigue en el historial como no favorito, con su marca
   `favorite` (`hasLeftSyncedSet`). Para los demás aparatos eso es «ha salido del
   conjunto»: la fusión les lleva `isFavorite = false` y cada uno decidirá qué hace
@@ -118,7 +128,10 @@ que lo use todavía salvo los tests.
 - **Fusión** (`Sync/SyncMerge.swift`): funciones puras `merge(local:remote:)` para
   items y grupos, sueltos o en listas. Por campo gana la marca mayor (fecha y, si
   empata, `deviceId` byte a byte); con marcas idénticas, `local`; `deletion` gana a
-  todo. El resultado lleva todas las marcas explícitas; `createdAt` es la mayor;
+  todo. `textContent`, `sealedText` e `isProtected` se toman juntos del lado que gana
+  `content` (proteger o desproteger ya marca `content`), así que nunca sale un item
+  sin proteger con el texto solo cifrado ni uno protegido en claro; la marca
+  `protection` del resultado es la mayor de las dos y no decide nada. El resultado lleva todas las marcas explícitas; `createdAt` es la mayor;
   `imageFilename` e `isFilterEnabled` son los locales. Las listas salen ordenadas por
   `id`. **No la llama nadie**: la fijan los vectores de `Tests/vectors/merge-vectors.json`,
   que Kotlin y Rust copiarán (§9), y `swift test` los pasa.
@@ -153,13 +166,14 @@ que lo use todavía salvo los tests.
   de gracia abierta (sin la llave privada no hay texto que comparar): fuera de ella la
   captura entra como item nuevo.
 - Editar texto o detalle **no** cambia `createdAt` ni el orden, a propósito.
-- **Abrir `store.enc` con una versión anterior** (sin modelo sincronizable): los
-  tombstones aparecen como filas vacías no favoritas, que su tope recicla. No se
-  pierde nada real; la versión anterior simplemente no sabe que estaban borrados.
-- **Proteger y editar a la vez en dos aparatos** puede fusionar `isProtected = true`
-  con un `textContent` en claro: `adoptInitialState` lo cifra al cargar (la misma
-  migración de siempre). Lo contrario, un `sealedText` sin protección, queda para
-  cuando se decida cómo viaja el texto protegido (ver `arquitectura.md`).
+- **Abrir los datos con una versión anterior** (sin modelo sincronizable, o un Widomin
+  con un Kit anterior): no ve los tombstones, porque no están en `store.enc` ni en
+  `groups.enc`. Lo que haga mientras tanto (borrar, capturar) no deja tombstones; al
+  volver a esta versión no se pierde nada, solo que esos borrados no constarán para
+  la sincronización.
+- **Proteger y editar a la vez en dos aparatos** no puede dejar un item incoherente:
+  contenido y protección viajan juntos con la marca `content` (ver «Fusión»). Gana
+  entero el lado que cambió el contenido o la protección más tarde.
 - La fila de texto usa `textLine`: texto completo en una línea (espacios colapsados),
   y quien recorta es la vista con `lineLimit(1)` según el ancho real. `textPreview`
   (40 caracteres + "...") sigue existiendo para otros anfitriones. Ninguno de los dos

@@ -27,7 +27,8 @@ los **no favoritos** de la vista actual.
 - Ambas rutas borran del disco los PNG de las imágenes eliminadas.
 - Todo pasa por `retire(_:)`: un item que **es o fue favorito** (borrar con 🗑 un
   favorito, o vaciar uno al que se le quitó la estrella) deja un tombstone sin
-  contenido en `itemTombstones`, para la sincronización futura. El historial que
+  contenido en `itemTombstones` (guardado aparte, en `item-tombstones.enc`), para la
+  sincronización futura. El historial que
   nunca fue favorito se borra de verdad. En pantalla no cambia nada: el tombstone
   no se enseña nunca (ver «Modelo sincronizable» en `_dominio.md`).
 - El botón de cabecera solo aparece en las vistas Texto e Imágenes, no en Grupos.

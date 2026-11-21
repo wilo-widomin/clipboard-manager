@@ -15,6 +15,13 @@
 //  el cifrado por corrupto y pisarlo. En el siguiente arranque de esta versión
 //  ese `store.json` se funde con `store.enc` y se borra (ver `loadMerging`).
 //
+//  Los tombstones (lo borrado que hay que recordar para la sincronización) van
+//  en sus propios archivos, `item-tombstones.enc` y `group-tombstones.enc`, y
+//  `store.enc`/`groups.enc` solo tienen registros vivos. Así una versión
+//  anterior de la app, o un Widomin con un Kit anterior, que comparten la
+//  carpeta y no conocen `deletion`, no los ven: no los enseñan como filas en
+//  blanco, no los cuentan en los topes ni los vuelven a guardar como vivos.
+//
 //  Regla de oro: si algo existente no se puede leer (llave ausente, descifrado
 //  que falla, JSON roto), el servicio **se bloquea**: no vuelve a escribir
 //  ningún archivo y lo dice en `blockingError`. Perder datos es peor que no
@@ -45,6 +52,16 @@ public protocol PersistenceService: Sendable {
     func enqueueSave(_ items: [ClipboardItem])
     /// Lo mismo que `enqueueSave(_:)` para los grupos.
     func enqueueSaveGroups(_ groups: [ClipboardGroup])
+
+    /// Los tombstones guardados, aparte de los registros vivos. Un archivo de
+    /// tombstones que existe y no se puede leer bloquea el servicio igual que
+    /// `store.enc`.
+    func loadTombstones() async -> (items: [ClipboardItem], groups: [ClipboardGroup])
+    /// Encola el guardado de los tombstones de items, en la misma cola y el
+    /// mismo orden que `enqueueSave(_:)`.
+    func enqueueSaveItemTombstones(_ tombstones: [ClipboardItem])
+    /// Lo mismo para los tombstones de grupos.
+    func enqueueSaveGroupTombstones(_ tombstones: [ClipboardGroup])
 }
 
 /// Implementación por defecto para servicios escritos antes de existir
@@ -70,6 +87,17 @@ public extension PersistenceService {
             }
         }
     }
+
+    /// Un servicio que no sabe guardar tombstones no tiene ninguno.
+    func loadTombstones() async -> (items: [ClipboardItem], groups: [ClipboardGroup]) {
+        ([], [])
+    }
+
+    /// Por defecto no se guardan: el servicio sigue funcionando como antes de
+    /// las marcas, solo que lo borrado no deja rastro.
+    func enqueueSaveItemTombstones(_ tombstones: [ClipboardItem]) {}
+
+    func enqueueSaveGroupTombstones(_ tombstones: [ClipboardGroup]) {}
 }
 
 /// Errores propios de la persistencia.
@@ -101,6 +129,10 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
     private let fileURL: URL
     /// `groups.enc`: los grupos, cifrados.
     private let groupsURL: URL
+    /// `item-tombstones.enc`: los items borrados que hay que recordar, cifrados.
+    private let itemTombstonesURL: URL
+    /// `group-tombstones.enc`: los grupos borrados, cifrados.
+    private let groupTombstonesURL: URL
     /// `store.json`: el nombre de siempre. Lo dejan una versión anterior (en
     /// claro) o una build sin publicar de §3.1 (ya cifrado). Si existe, se funde
     /// en `store.enc` y se borra.
@@ -127,11 +159,14 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
         self.groupsURL = dir.appendingPathComponent("groups.enc")
         self.legacyFileURL = dir.appendingPathComponent("store.json")
         self.legacyGroupsURL = dir.appendingPathComponent("groups.json")
+        self.itemTombstonesURL = dir.appendingPathComponent("item-tombstones.enc")
+        self.groupTombstonesURL = dir.appendingPathComponent("group-tombstones.enc")
     }
 
     /// For testing with a custom URL. `fileURL` da el nombre base: los items
     /// cifrados van en `<base>.enc`, el heredado se busca en `<base>.json` y los
-    /// grupos en `groups.enc` / `groups.json` de la misma carpeta.
+    /// grupos en `groups.enc` / `groups.json` de la misma carpeta, igual que
+    /// los tombstones (`item-tombstones.enc`, `group-tombstones.enc`).
     public init(fileURL: URL) {
         let base = fileURL.deletingPathExtension()
         let dir = fileURL.deletingLastPathComponent()
@@ -139,6 +174,8 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
         self.legacyFileURL = base.appendingPathExtension("json")
         self.groupsURL = dir.appendingPathComponent("groups.enc")
         self.legacyGroupsURL = dir.appendingPathComponent("groups.json")
+        self.itemTombstonesURL = dir.appendingPathComponent("item-tombstones.enc")
+        self.groupTombstonesURL = dir.appendingPathComponent("group-tombstones.enc")
     }
 
     // MARK: - Estado de bloqueo
@@ -179,10 +216,18 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
                 // Copias en claro que Quick Look dejara de la sesión anterior.
                 QuickLookTemporaryFiles.purge()
                 self.removeStaleTemporaries(in: self.fileURL.deletingLastPathComponent())
+                // Los tombstones se leen antes: un `store.json` que haya que
+                // fundir no debe resucitar un item borrado aquí.
+                let deadIDs = self.tombstoneIDs(self.itemTombstonesURL, as: ClipboardItem.self)
+                if self.isBlocked {
+                    continuation.resume(returning: [])
+                    return
+                }
                 let items = self.loadMerging(
                     current: self.fileURL,
                     legacy: self.legacyFileURL,
                     as: ClipboardItem.self,
+                    alsoKnown: deadIDs,
                     prepare: { ProtectedTextCipher.sealLegacyProtectedTexts($0).items }
                 )
                 if !self.isBlocked {
@@ -232,10 +277,16 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
                     continuation.resume(returning: [])
                     return
                 }
+                let deadIDs = self.tombstoneIDs(self.groupTombstonesURL, as: ClipboardGroup.self)
+                if self.isBlocked {
+                    continuation.resume(returning: [])
+                    return
+                }
                 let groups = self.loadMerging(
                     current: self.groupsURL,
                     legacy: self.legacyGroupsURL,
-                    as: ClipboardGroup.self
+                    as: ClipboardGroup.self,
+                    alsoKnown: deadIDs
                 )
                 continuation.resume(returning: groups)
             }
@@ -271,10 +322,65 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
         }
     }
 
+    // MARK: - Tombstones
+
+    /// Lee los dos archivos de tombstones. Uno que no existe es una lista
+    /// vacía; uno que no se puede leer bloquea el servicio (y entonces las dos
+    /// listas vuelven vacías, como `load()`).
+    public func loadTombstones() async -> (items: [ClipboardItem], groups: [ClipboardGroup]) {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(returning: ([], []))
+                    return
+                }
+                let items = self.readEncrypted(self.itemTombstonesURL, as: [ClipboardItem].self) ?? []
+                let groups = self.readEncrypted(self.groupTombstonesURL, as: [ClipboardGroup].self) ?? []
+                if self.isBlocked {
+                    continuation.resume(returning: ([], []))
+                } else {
+                    continuation.resume(returning: (items, groups))
+                }
+            }
+        }
+    }
+
+    /// Encola en la cola serie, como `enqueueSave(_:)`.
+    public func enqueueSaveItemTombstones(_ tombstones: [ClipboardItem]) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.writeFile(self.itemTombstonesURL, value: tombstones)
+            } catch {
+                NSLog("ClipboardManager: failed to persist item tombstones: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    public func enqueueSaveGroupTombstones(_ tombstones: [ClipboardGroup]) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.writeFile(self.groupTombstonesURL, value: tombstones)
+            } catch {
+                NSLog("ClipboardManager: failed to persist group tombstones: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Los `id` de un archivo de tombstones, para que la fusión con un archivo
+    /// heredado los dé por conocidos. Vacío si no existe; si no se puede leer,
+    /// bloquea.
+    private func tombstoneIDs<T: Codable & Identifiable>(_ url: URL, as type: T.Type) -> Set<T.ID> {
+        Set((readEncrypted(url, as: [T].self) ?? []).map { $0.id })
+    }
+
     // MARK: - Lectura, fusión y escritura cifradas (siempre en `queue`)
 
     private func currentKey() throws -> SymmetricKey {
-        try LocalKey.shared.key(alsoChecking: [fileURL, groupsURL, legacyFileURL, legacyGroupsURL])
+        try LocalKey.shared.key(alsoChecking: [
+            fileURL, groupsURL, legacyFileURL, legacyGroupsURL, itemTombstonesURL, groupTombstonesURL,
+        ])
     }
 
     /// Lee la lista cifrada (`current`) y, si además existe el archivo con el
@@ -286,7 +392,8 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
     ///   cifrado con el nombre antiguo.
     /// - Los dos: una versión anterior se abrió después de migrar y creó un
     ///   archivo nuevo. No se pierde ninguno: se suman los elementos de `legacy`
-    ///   cuyo `id` no está ya en `current`.
+    ///   cuyo `id` no está ya en `current` ni en `alsoKnown` (los tombstones:
+    ///   lo borrado aquí no vuelve desde el archivo heredado).
     ///
     /// Con `legacy` presente, el resultado (pasado por `prepare`) se escribe
     /// cifrado en `current`, se relee y se comprueba, y solo entonces se borra
@@ -297,6 +404,7 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
         current: URL,
         legacy: URL,
         as type: T.Type,
+        alsoKnown: Set<T.ID> = [],
         prepare: ([T]) -> [T] = { $0 }
     ) -> [T] {
         let currentList = readEncrypted(current, as: [T].self)
@@ -306,7 +414,7 @@ public final class JSONPersistenceService: PersistenceService, @unchecked Sendab
         guard let legacyList = legacyList else { return currentList ?? [] }
 
         let base = currentList ?? []
-        let knownIDs = Set(base.map { $0.id })
+        let knownIDs = Set(base.map { $0.id }).union(alsoKnown)
         let added = legacyList.filter { !knownIDs.contains($0.id) }
         let merged = prepare(base + added)
 

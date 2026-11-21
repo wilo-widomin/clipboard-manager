@@ -59,15 +59,19 @@ public struct SyncStamp: Codable, Hashable, Sendable, Comparable {
 /// (ver `ClipboardItem.effectiveStamps()`). Nada se reescribe al cargar: la
 /// marca solo se guarda cuando el campo cambia de verdad.
 public struct ItemFieldStamps: Codable, Hashable, Sendable {
-    /// El contenido: `textContent` y `sealedText` van juntos, son el mismo
-    /// texto en claro o cifrado.
+    /// El contenido: `textContent`, `sealedText` e `isProtected` van juntos
+    /// (el mismo texto en claro o cifrado, y si está protegido). Proteger o
+    /// desproteger también cambia esta marca.
     public var content: SyncStamp?
     public var detail: SyncStamp?
     public var title: SyncStamp?
     /// `isFavorite`. Si existe y el item no es favorito, el item **salió** del
     /// conjunto sincronizado (ver `ClipboardItem.hasLeftSyncedSet`).
     public var favorite: SyncStamp?
-    /// `isProtected`.
+    /// Cuándo cambió `isProtected` por última vez. Solo informativa: en la
+    /// fusión `isProtected` sigue a `content` y esta marca se queda con la
+    /// mayor de los dos lados. Se conserva para que los archivos ya escritos
+    /// se lean igual.
     public var protection: SyncStamp?
     /// `groupID`.
     public var group: SyncStamp?

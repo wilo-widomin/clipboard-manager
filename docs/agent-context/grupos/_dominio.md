@@ -33,7 +33,8 @@ Un item pertenece **como mucho a un grupo**.
 - La **selección** del filtro no se persiste entre arranques (`load()` la limpia),
   aunque `groups.enc` la escriba.
 - **Borrar un grupo deja tombstone** (`ClipboardGroup.tombstone`, sin nombre) en
-  `store.groupTombstones`, que se guarda en `groups.enc` con los vivos pero nunca
+  `store.groupTombstones`, que se guarda aparte en `group-tombstones.enc` (nunca en
+  `groups.enc`, para que una versión anterior no enseñe un chip sin nombre) y nunca
   está en `store.groups`: chips, casillas, menú 📁 y `assignGroup` no lo ven. Los
   items que tenía pierden `groupID` con su marca `group`.
 - **Renombrar marca `nameStamp`** (solo si el nombre cambia). Un grupo sin marca

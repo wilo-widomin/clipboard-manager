@@ -10,9 +10,12 @@ import XCTest
 import ClipboardManagerKit
 
 /// Persistencia en memoria: devuelve lo que se le dé y guarda lo último escrito.
+/// Los tombstones van aparte, como en `JSONPersistenceService`.
 private final class MemoryPersistence: PersistenceService, @unchecked Sendable {
     var storedItems: [ClipboardItem]
     var storedGroups: [ClipboardGroup]
+    var storedItemTombstones: [ClipboardItem] = []
+    var storedGroupTombstones: [ClipboardGroup] = []
 
     init(items: [ClipboardItem] = [], groups: [ClipboardGroup] = []) {
         storedItems = items
@@ -26,6 +29,11 @@ private final class MemoryPersistence: PersistenceService, @unchecked Sendable {
     func saveGroups(_ groups: [ClipboardGroup]) async throws { storedGroups = groups }
     func enqueueSave(_ items: [ClipboardItem]) { storedItems = items }
     func enqueueSaveGroups(_ groups: [ClipboardGroup]) { storedGroups = groups }
+    func loadTombstones() async -> (items: [ClipboardItem], groups: [ClipboardGroup]) {
+        (storedItemTombstones, storedGroupTombstones)
+    }
+    func enqueueSaveItemTombstones(_ tombstones: [ClipboardItem]) { storedItemTombstones = tombstones }
+    func enqueueSaveGroupTombstones(_ tombstones: [ClipboardGroup]) { storedGroupTombstones = tombstones }
 }
 
 final class ClipboardStoreSyncTests: XCTestCase {
@@ -69,7 +77,9 @@ final class ClipboardStoreSyncTests: XCTestCase {
         XCTAssertEqual(dead.deletion?.deviceId, device)
         XCTAssertNil(dead.textContent)
         XCTAssertNil(dead.detail)
-        XCTAssertEqual(persistence.storedItems.map(\.id), [id])
+        // `store.enc` solo tiene vivos; el tombstone va a su propio archivo.
+        XCTAssertTrue(persistence.storedItems.isEmpty)
+        XCTAssertEqual(persistence.storedItemTombstones.map(\.id), [id])
 
         // Al volver a cargar, el tombstone no aparece en la lista.
         let reloaded = await makeStore(persistence)
@@ -151,11 +161,53 @@ final class ClipboardStoreSyncTests: XCTestCase {
         XCTAssertEqual(store.groupTombstones[0].name, "")
         XCTAssertNil(store.items[0].groupID)
         XCTAssertEqual(store.items[0].stamps.group?.deviceId, device)
-        XCTAssertEqual(persistence.storedGroups.map(\.id), [groupID])
+        XCTAssertTrue(persistence.storedGroups.isEmpty)
+        XCTAssertEqual(persistence.storedGroupTombstones.map(\.id), [groupID])
 
         let reloaded = await makeStore(persistence)
         XCTAssertTrue(reloaded.groups.isEmpty)
         XCTAssertEqual(reloaded.groupTombstones.map(\.id), [groupID])
+    }
+
+    /// Una build anterior de esta rama guardaba los tombstones mezclados con
+    /// los vivos. Al cargar se apartan, gana el borrado si el mismo id está
+    /// vivo, y se reescriben los dos archivos por separado.
+    @MainActor
+    func testInlineTombstonesMoveToTheirOwnFiles() async {
+        var dead = ClipboardItem.text("borrado")
+        dead.isFavorite = true
+        let deadStamp = SyncStamp(updatedAt: Date(timeIntervalSince1970: 1_700_000_000), deviceId: device)
+        let tombstone = dead.tombstone(deadStamp)
+        let alive = ClipboardItem.text("vivo")
+        let deadGroup = ClipboardGroup(name: "Viejo").tombstone(deadStamp)
+        let liveGroup = ClipboardGroup(name: "Trabajo")
+
+        // El mismo id vivo y borrado: gana el borrado.
+        let persistence = MemoryPersistence(items: [alive, tombstone, dead], groups: [liveGroup, deadGroup])
+        let store = await makeStore(persistence)
+
+        XCTAssertEqual(store.items.map(\.id), [alive.id])
+        XCTAssertEqual(store.itemTombstones.map(\.id), [tombstone.id])
+        XCTAssertEqual(store.groups.map(\.id), [liveGroup.id])
+        XCTAssertEqual(store.groupTombstones.map(\.id), [deadGroup.id])
+        XCTAssertEqual(persistence.storedItems.map(\.id), [alive.id])
+        XCTAssertEqual(persistence.storedItemTombstones.map(\.id), [tombstone.id])
+        XCTAssertEqual(persistence.storedGroups.map(\.id), [liveGroup.id])
+        XCTAssertEqual(persistence.storedGroupTombstones.map(\.id), [deadGroup.id])
+    }
+
+    /// Un item vivo cuyo id ya tiene tombstone en su archivo (la app murió
+    /// entre las dos escrituras) no vuelve: gana el borrado.
+    @MainActor
+    func testTombstoneFileWinsOverLiveCopy() async {
+        var item = ClipboardItem.text("a medio borrar")
+        item.isFavorite = true
+        let persistence = MemoryPersistence(items: [item])
+        persistence.storedItemTombstones = [item.tombstone(SyncStamp.now(deviceId: device))]
+        let store = await makeStore(persistence)
+        XCTAssertTrue(store.items.isEmpty)
+        XCTAssertEqual(store.itemTombstones.map(\.id), [item.id])
+        XCTAssertTrue(persistence.storedItems.isEmpty)
     }
 
     @MainActor

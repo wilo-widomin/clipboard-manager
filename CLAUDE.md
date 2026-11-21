@@ -120,14 +120,17 @@ live in the status-item right-click menu).
 - **ClipboardGroup**: id, name, isFilterEnabled, nameStamp?, deletion?. Persisted separately in `groups.enc`.
 - **Modelo sincronizable** (§6 de `docs/05-blueprint-sync-android.md`, todavía sin red): los
   items llevan además `imageHash?` (SHA-256 en hexadecimal del PNG en claro), `stamps` (una
-  marca `(updatedAt, deviceId)` por campo: content = textContent+sealedText, detail, title,
-  favorite, protection, group) y `deletion?`. Cada mutación del store marca solo los campos que
+  marca `(updatedAt, deviceId)` por campo: content = textContent+sealedText+isProtected, detail,
+  title, favorite, protection (solo informativa), group) y `deletion?`. Cada mutación del store marca solo los campos que
   cambian de verdad; una marca ausente es implícita —`(createdAt, "")` en items, `(1970, "")` en
   grupos— y nunca se escribe al cargar. Quitar algo que **es o fue** favorito (borrar, tope,
   vaciar) y borrar cualquier grupo deja un **tombstone** sin contenido en `itemTombstones` /
   `groupTombstones`; el historial que nunca fue favorito se sigue borrando de verdad. `items` y
   `groups` solo tienen lo vivo, así que vistas, topes, buscador, deduplicación y filtro de grupos
-  no ven nunca un tombstone; `persist` escribe los dos juntos. Quitar la estrella deja el item
+  no ven nunca un tombstone. En disco también van aparte, en `item-tombstones.enc` y
+  `group-tombstones.enc` (mismo cifrado y escritura durable que `store.enc`, y se escriben
+  antes que los vivos): `store.enc`/`groups.enc` solo tienen registros vivos, para que una
+  versión anterior o un Widomin con un Kit anterior no los tome por filas en blanco. Quitar la estrella deja el item
   aquí (`hasLeftSyncedSet`) hasta que el tope lo recicle. Deduplicar conserva el `id` y las
   marcas del item sustituido. El `deviceId` vive en el archivo `device-id` junto a `store.enc`
   (lo comparten la app y Widomin). `SyncMerge.merge(local:remote:)` es pura y la fijan los

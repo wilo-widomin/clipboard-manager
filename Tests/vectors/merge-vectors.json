@@ -6,6 +6,7 @@
     "Fechas en milisegundos desde 1970. Una marca es {updatedAt, deviceId}; se ordena por updatedAt y luego por deviceId (bytes ASCII).",
     "Marca ausente en un item = {createdAt de ese item, deviceId ''}; en un grupo = {0, ''}. El resultado de fusionar dos versiones lleva todas las marcas explícitas.",
     "Si cualquiera de los dos lados tiene deletion, el resultado es un tombstone: solo id, contentType, createdAt (la mayor) y la deletion mayor.",
+    "textContent, sealedText e isProtected son un solo campo: los tres se toman del lado que gana la marca content. La marca protection del resultado es la mayor de las dos y no decide nada.",
     "Campos ausentes valen: isFavorite false, isProtected false, isFilterEnabled false, el resto null/vacío. Compara normalizando así."
   ],
   "deviceIds": {
@@ -289,6 +290,178 @@
             "protection": {
               "updatedAt": 1700000100000,
               "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "protección y contenido van juntos: gana content y no queda un item sin proteger con el texto solo cifrado",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "viejo",
+          "isProtected": false,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "protection": {
+              "updatedAt": 1700000300000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000300000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "protección y contenido van juntos: gana content y no queda un item protegido con el texto en claro",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "sealedText": "CLPPxxxx",
+          "isProtected": true,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "nuevo",
+          "isProtected": false,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "textContent": "nuevo",
+          "isProtected": false,
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000200000,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "favorite": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "protection": {
+              "updatedAt": 1700000100000,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
             },
             "group": {
               "updatedAt": 1700000000000,

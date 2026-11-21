@@ -24,8 +24,10 @@ import Foundation
 ///    rellenas con la fecha de creación de su lado), porque `createdAt` puede
 ///    cambiar y con ella cambiarían las implícitas.
 ///
-/// Los campos de contenido van de dos en dos: `textContent` y `sealedText` son
-/// un solo campo (`content`). `imageHash` no cambia nunca (se toma el de
+/// Los campos de contenido van juntos: `textContent`, `sealedText` e
+/// `isProtected` son un solo campo (`content`) y se toman los tres del lado que
+/// gana esa marca; la marca `protection` del resultado es la mayor de las dos,
+/// pero no decide nada. `imageHash` no cambia nunca (se toma el de
 /// `local`, o el de `remote` si `local` no lo tiene); `imageFilename` es un
 /// nombre de archivo local y se conserva el de `local`. `createdAt` es la mayor
 /// de las dos. `isFilterEnabled` de los grupos no se sincroniza: se conserva el
@@ -53,10 +55,17 @@ public enum SyncMerge {
         merged.deletion = nil
         merged.imageHash = local.imageHash ?? remote.imageHash
 
+        // El contenido y la protección son un solo bloque: el texto en claro,
+        // el texto cifrado y `isProtected` se toman del mismo lado, el que gana
+        // la marca `content`. Fusionarlos por separado podría dejar un item
+        // sin proteger con el texto solo cifrado (una fila en blanco que no se
+        // puede pegar) o uno protegido con el texto en claro. Proteger o
+        // desproteger ya marca `content` (`ClipboardStore.setText`).
         let content = winner(l.content, r.content, local)
         if content.remoteWins {
             merged.textContent = remote.textContent
             merged.sealedText = remote.sealedText
+            merged.isProtected = remote.isProtected
         }
         let detail = winner(l.detail, r.detail, local)
         if detail.remoteWins { merged.detail = remote.detail }
@@ -64,8 +73,10 @@ public enum SyncMerge {
         if title.remoteWins { merged.title = remote.title }
         let favorite = winner(l.favorite, r.favorite, local)
         if favorite.remoteWins { merged.isFavorite = remote.isFavorite }
+        // La marca `protection` ya no decide nada; se conserva la mayor para
+        // que el resultado no pierda historia y los archivos sigan siendo los
+        // mismos.
         let protection = winner(l.protection, r.protection, local)
-        if protection.remoteWins { merged.isProtected = remote.isProtected }
         let group = winner(l.group, r.group, local)
         if group.remoteWins { merged.groupID = remote.groupID }
 

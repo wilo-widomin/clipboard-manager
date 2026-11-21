@@ -74,7 +74,8 @@ NSPasteboard → ClipboardMonitor → ClipboardStore (@Published) → SwiftUI en
 
 ## Datos cifrados en disco
 
-`store.enc`, `groups.enc` y cada archivo de `images/` se guardan cifrados. En
+`store.enc`, `groups.enc`, los tombstones (`item-tombstones.enc`,
+`group-tombstones.enc`) y cada archivo de `images/` se guardan cifrados. En
 memoria todo va en claro —salvo el texto de los items protegidos, ver la sección
 siguiente—: el cifrado vive solo en el borde con el disco (`JSONPersistenceService`
 para los JSON, `ImageStorage` para las imágenes), así que buscador, filas y editor no
@@ -95,7 +96,8 @@ saben nada de él.
 - **Fusión con el nombre antiguo** (`JSONPersistenceService.loadMerging`): si al
   cargar existe `store.json` —en claro de una versión anterior, o ya cifrado (`CLPE`)
   por una build sin publicar de §3.1—, sus items se suman a los de `store.enc` (los
-  que no tengan ya su `id`; si no hay `store.enc`, es la migración de siempre). Los
+  que no tengan ya su `id` ni un tombstone en `item-tombstones.enc`; si no hay
+  `store.enc`, es la migración de siempre). Los
   protegidos que traigan el texto en claro se cifran con la `protectedKey` antes de
   escribir (`ProtectedTextCipher.sealLegacyProtectedTexts`, la misma que usa
   `adoptInitialState`). El resultado se escribe en `store.enc`, se relee y se
@@ -104,8 +106,8 @@ saben nada de él.
   imágenes en claro se migran todas (también las huérfanas) en el mismo `load()`,
   mirando solo la cabecera de cada archivo (`FileCipher.fileIsEncrypted(at:)`); un
   fallo en una imagen no bloquea, se reintenta.
-- **Escritura durable** (`writeDurably`): migraciones y cada guardado de `store.enc`
-  y `groups.enc` escriben en un temporal oculto de la misma carpeta
+- **Escritura durable** (`writeDurably`): migraciones y cada guardado de `store.enc`,
+  `groups.enc` y los dos archivos de tombstones escriben en un temporal oculto de la misma carpeta
   (`.<nombre>.<UUID>.migrating`, permisos 0600), lo llevan al disco con
   `fcntl(F_FULLFSYNC)` (o `fsync` si el volumen no lo admite), lo releen y comprueban
   si es una migración, hacen `rename` y sincronizan la carpeta. Un corte de luz no
@@ -300,6 +302,9 @@ mayúsculas, sería `Tests/ClipboardManagerTests/`, otra carpeta) y no tiene tes
 - Preferencias sueltas en `UserDefaults`: `viewMode`, `popoverWidth`, `popoverHeight`.
 - `device-id` en la carpeta de datos es el `deviceId` de las marcas de cambio: un
   UUID en claro, no secreto. Borrarlo solo hace que se cree otro; no se pierde nada.
-- `store.enc` y `groups.enc` guardan también los **tombstones** (lo borrado que fue
-  favorito, y los grupos borrados), sin contenido. Una versión anterior los enseñaría
-  como filas o grupos vacíos.
+- Los **tombstones** (lo borrado que fue favorito, y los grupos borrados), sin
+  contenido, van en `item-tombstones.enc` y `group-tombstones.enc`, nunca en
+  `store.enc`/`groups.enc`: una versión anterior (o Widomin con un Kit anterior) los
+  enseñaría como filas o grupos vacíos, los contaría en el tope y los volvería a
+  guardar como vivos. Si uno de esos archivos no se puede leer, la app se bloquea
+  como con `store.enc`.
