@@ -32,9 +32,12 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
   siempre tapado aunque ya se haya autenticado. Siembra el texto desde el item que
   recibe (ya revelado), no desde el almacén, donde va cifrado. Si Guardar falla (sin
   llave para cifrar) lo dice en rojo y no cierra.
-- **Proteger hace favorito**: cuando `setText` pasa un item de no protegido a protegido,
-  lo marca `isFavorite` (con su marca `favorite`) para que el tope del historial no se
-  lo lleve. Desproteger no quita la estrella. `addManual` ya nace favorito.
+- **Guardar un cambio real en el editor hace favorito** al item (`isFavorite` con su
+  marca `favorite`; solo se sella lo que cambia de verdad) para que el tope del
+  historial no se lo lleve. Cuenta cualquier cambio de texto, nota, título o
+  «Protegido», en `setText` y en `setDetail` (helper privado
+  `markFavouriteIfNeeded`). Guardar sin cambios no hace nada y quitar la estrella
+  nunca es automático. `addManual` ya nace favorito.
 - `ProtectedAccess` — la puerta: `deviceOwnerAuthentication` (Touch ID o contraseña
   del Mac) con **ventana de gracia de 15 minutos** en memoria. `reveal(_:reason:action:)`
   autentica, saca la llave privada del Llavero con el mismo `LAContext` y entrega a

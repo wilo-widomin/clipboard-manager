@@ -132,6 +132,55 @@ final class ClipboardStoreSyncTests: XCTestCase {
     }
 
     @MainActor
+    func testEditingNoteMakesItemFavouriteButSameNoteDoesNot() async {
+        let store = await makeStore(MemoryPersistence())
+        store.add(.text("hola"))
+        let id = store.items[0].id
+        XCTAssertFalse(store.items[0].isFavorite)
+
+        // Guardar sin cambios no hace nada.
+        store.setDetail(id: id, detail: "")
+        XCTAssertFalse(store.items[0].isFavorite)
+        XCTAssertNil(store.items[0].stamps.favorite)
+
+        store.setDetail(id: id, detail: "nota")
+        XCTAssertTrue(store.items[0].isFavorite)
+        XCTAssertEqual(store.items[0].stamps.favorite?.deviceId, device)
+
+        // La misma nota otra vez no toca la marca del favorito.
+        let favouriteStamp = store.items[0].stamps.favorite
+        store.setDetail(id: id, detail: "nota")
+        XCTAssertEqual(store.items[0].stamps.favorite, favouriteStamp)
+    }
+
+    @MainActor
+    func testEditingTextMakesItemFavouriteButSameTextDoesNot() async {
+        let store = await makeStore(MemoryPersistence())
+        store.add(.text("hola"))
+        let id = store.items[0].id
+
+        XCTAssertTrue(store.setText(id: id, text: "hola", isProtected: false, title: ""))
+        XCTAssertFalse(store.items[0].isFavorite)
+        XCTAssertNil(store.items[0].stamps.favorite)
+
+        XCTAssertTrue(store.setText(id: id, text: "hola editado", isProtected: false, title: ""))
+        XCTAssertTrue(store.items[0].isFavorite)
+        XCTAssertEqual(store.items[0].stamps.favorite?.deviceId, device)
+    }
+
+    @MainActor
+    func testEditingTitleMakesItemFavourite() async {
+        let store = ClipboardStore(
+            persistence: MemoryPersistence(), deviceId: device, textSealer: { "sellado:" + $0 }
+        )
+        await store.load()
+        store.add(.text("clave"))
+        let id = store.items[0].id
+        XCTAssertTrue(store.setText(id: id, text: "clave", isProtected: false, title: "Banco"))
+        XCTAssertTrue(store.items[0].isFavorite)
+    }
+
+    @MainActor
     func testUnfavouriteKeepsItemAndCapLeavesTombstone() async {
         let store = await makeStore(MemoryPersistence())
         store.add(.text("fue favorito"))

@@ -486,8 +486,9 @@ public final class ClipboardStore: ObservableObject {
     /// cifra con la `protectedKey` y no queda en claro ni en memoria; sin él se
     /// guarda en claro y se descarta el cifrado.
     ///
-    /// Si el item pasa de no protegido a protegido, además se hace favorito
-    /// (con su marca); desproteger no le quita la estrella.
+    /// Si cambia algo de verdad (texto, protección o título), el item se hace
+    /// favorito (con su marca); sin cambios no se toca, y quitar la estrella
+    /// nunca es automático.
     ///
     /// Devuelve `false` sin tocar nada si el texto está en blanco, si se
     /// protege sin título o si no hay llave para cifrar: nunca se guarda en
@@ -521,12 +522,10 @@ public final class ClipboardStore: ObservableObject {
         items[idx].title = newTitle
 
         let stamp = newStamp()
-        // Proteger un item que no lo estaba lo hace favorito: solo los
-        // favoritos escapan al tope del historial, y una contraseña protegida
-        // no debe perderse con él. Desproteger no quita la estrella.
-        if isProtected && protectionChanged && !items[idx].isFavorite {
-            items[idx].isFavorite = true
-            items[idx].stamps.favorite = stamp
+        // Cualquier cambio real hecho desde el editor lo hace favorito: solo
+        // los favoritos escapan al tope del historial. Sin cambios no se toca.
+        if contentChanged || protectionChanged || titleChanged {
+            markFavouriteIfNeeded(idx: idx, stamp: stamp)
         }
         if contentChanged || protectionChanged { items[idx].stamps.content = stamp }
         if protectionChanged { items[idx].stamps.protection = stamp }
@@ -537,17 +536,28 @@ public final class ClipboardStore: ObservableObject {
     }
 
     /// Sets (or clears) the free-text detail note on an item. Whitespace-only
-    /// input clears the note (stored as `nil`). Order is unaffected, so no
-    /// re-sort — just persist.
+    /// input clears the note (stored as `nil`). Un cambio real hace favorito al
+    /// item (y reordena); sin cambios no se toca nada.
     public func setDetail(id: ClipboardItem.ID, detail: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         let newDetail: String? = trimmed.isEmpty ? nil : trimmed
         if items[idx].detail != newDetail {
+            let stamp = newStamp()
             items[idx].detail = newDetail
-            items[idx].stamps.detail = newStamp()
+            items[idx].stamps.detail = stamp
+            markFavouriteIfNeeded(idx: idx, stamp: stamp)
+            items = sort(items)
         }
         persist()
+    }
+
+    /// Hace favorito el item de `idx` si no lo era, sellando solo ese campo.
+    /// No reordena: quien llama lo hace después.
+    private func markFavouriteIfNeeded(idx: Int, stamp: SyncStamp) {
+        guard !items[idx].isFavorite else { return }
+        items[idx].isFavorite = true
+        items[idx].stamps.favorite = stamp
     }
 
     /// Marca o desmarca un item de texto como protegido, con el título que la

@@ -184,6 +184,10 @@ live in the status-item right-click menu).
   and, for text items, the content (with protection and title) via `store.setText(id:text:isProtected:title:)` — stored
   verbatim, **rejected if blank** (Guardar is disabled too, so an edit can't leave a
   ghost row), and it touches neither `createdAt` nor the order.
+- **Saving any real change** in the editor (text, note, title or the `Protegido`
+  switch) makes the item a favourite (with its favourite stamp), done in
+  `setText`/`setDetail`. Saving without changes does nothing; removing the star is
+  never automatic.
 - Rows show a `note.text` glyph (`DetailIndicator`) when the item has a detail,
   with the note text as tooltip.
 - Opening the editor goes through the controller (`PopoverActions.editDetail`), like
