@@ -77,6 +77,11 @@ por otro camino no pasa por ese control.
   memoria ese tiempo y luego se olvida.
 - Willy no nota ningún cambio: pide copiar o editar, pone el dedo y funciona igual que
   ahora.
+- **Implementado el 21-11-2026, con un recorte que Willy aceptó ese día:** con la firma
+  actual (sin perfil de aprovisionamiento) macOS no puede atar la llave a Touch ID, así
+  que el dedo lo exige la app, no el sistema. Se gana igualmente que el texto protegido
+  no está en claro ni en memoria ni dentro del archivo descifrado. Pasar a que lo exija
+  macOS (firmar con perfil y «Keychain Sharing») queda aplazado por decisión de Willy.
 
 ### 3.3 Contraseñas copiadas: respetar la marca de secreto
 
