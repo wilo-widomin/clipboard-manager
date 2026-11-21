@@ -10,9 +10,12 @@ pasa a «Hecho» en el mismo cambio.
   un permiso especial de Apple. Falta averiguar si basta el certificado de desarrollador
   que ya hay en el Mac o si hace falta la cuenta de pago (unos 99 € al año). Aplazado
   por Willy el 21-11-2026. Detalle en `05-blueprint-sync-android.md`, §3.2.
-- **Quitar la dirección de la red de casa** que aparece en un documento del proyecto de
-  Android (`docs/agent-context/arquitectura.md` de `clipboard-manager-android`). No debe
-  estar en el repositorio.
+- **La dirección de la red de casa sigue en el historial antiguo de git** del proyecto de
+  Android (ya no está en los documentos). Falta que Willy decida si se reescribe el
+  historial o se deja: el repositorio es privado y la dirección solo vale dentro de casa.
+- **App Android, lo que queda**: crear imágenes y el pulido para tablet.
+- **Probar en el Mac** que guardar un cambio en el editor hace favorito (subido el
+  21-11-2026, sin probar todavía).
 - **Copias antiguas de Time Machine.** Las copias hechas antes del 21-11-2026 guardan el
   historial sin cifrar. Para quitarlo de ahí hay que borrar esas copias.
 - **Que los borrados guardados no crezcan sin fin.** Desde el modelo sincronizable, borrar
@@ -35,3 +38,7 @@ pasa a «Hecho» en el mismo cambio.
   `prueba-seguridad-mac.md` el 21-11-2026.
 - **Ventana del editor** (21-11-2026): un item ya abierto no abre otra ventana; la que
   hay vuelve al frente aunque esté tapada o minimizada. Probado por Willy.
+- **Modelo preparado para sincronizar en el Mac** (21-11-2026): `swift test` en verde en
+  el Mac de Willy.
+- **App Android local y cifrada** (21-11-2026): Willy pasó toda la lista de
+  `prueba-app-local.md` en su móvil; unida a la rama principal del proyecto de Android.
