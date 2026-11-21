@@ -8,7 +8,7 @@ haber mirado su documento.
 
 | Si la tarea trata de… | Abre |
 |---|---|
-| capturar lo copiado, monitor, duplicados, límites, favoritos, orden, borrar, vaciar, persistencia de items | `historial/` |
+| capturar lo copiado, monitor, duplicados, límites, favoritos, orden, borrar, vaciar, persistencia de items, marcas de cambio, tombstones, fusión, `deviceId`, vectores | `historial/` |
 | grupos, carpetas, asignar, renombrar, filtro, chips/badges, "Sin grupo", flechas de la tira | `grupos/` |
 | icono de la barra, popover, pestañas Texto/Imágenes/Grupos, filas, buscador, pegar, Cmd+V, foco, Quick Look, tamaño, cursores, About | `popover/` |
 | clic derecho en una fila, editar el texto copiado, nota de detalle, ventana del editor, items protegidos, autenticación, crear una contraseña a mano, generador de contraseñas | `edicion-item/` |
@@ -25,6 +25,8 @@ como dependencia SPM. Si un segundo anfitrión lo necesitaría, va al paquete.
 
 - `Sources/ClipboardManagerKit/Models/` — `ClipboardItem`, `ClipboardGroup`, `ClipboardStore`
 - `Sources/ClipboardManagerKit/Monitor/` — polling del portapapeles
+- `Sources/ClipboardManagerKit/Sync/` — modelo sincronizable sin red: `SyncStamp` (marcas por campo), `SyncMerge` (fusión pura), `DeviceIdentity` (ver `historial/`)
+- `Tests/` — `swift test`: vectores de fusión (`Tests/vectors/merge-vectors.json`) y tests del store
 - `Sources/ClipboardManagerKit/Persistence/` — JSON cifrado (`store.enc` + `groups.enc`; funde los antiguos `store.json`/`groups.json`)
 - `Sources/ClipboardManagerKit/UI/` — popover, filas, chips, buscador, editor, `PopoverActions`
 - `Sources/ClipboardManagerKit/Security/` — `ProtectedAccess`, `ProtectedKey` y `ProtectedTextCipher` (items protegidos, cifrados con su propia llave), `PasswordGenerator` (modal «Nueva contraseña») y el cifrado en disco: `LocalKey`, `FileCipher`, `QuickLookTemporaryFiles` (ver `arquitectura.md`)

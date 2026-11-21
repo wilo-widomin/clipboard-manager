@@ -23,6 +23,34 @@ public struct ClipboardGroup: Identifiable, Codable, Sendable, Equatable {
     /// immediately start hiding everything else.
     public var isFilterEnabled: Bool
 
+    // MARK: - Sincronización (§6 del blueprint)
+
+    /// Marca del último cambio de `name`. `nil` = nunca renombrado desde que hay
+    /// marcas; su marca efectiva es `SyncStamp.legacyGroup` (ver
+    /// `effectiveNameStamp`). `isFilterEnabled` no lleva marca: no se sincroniza.
+    public var nameStamp: SyncStamp? = nil
+
+    /// Si existe, el grupo está **borrado** (tombstone): se conserva el registro,
+    /// sin nombre, para que el borrado gane a un renombrado de otro aparato. El
+    /// store no lo enseña nunca: vive aparte, en `ClipboardStore.groupTombstones`.
+    public var deletion: SyncStamp? = nil
+
+    /// Cuándo se borró, o `nil` si está vivo.
+    public var deletedAt: Date? { deletion?.updatedAt }
+
+    /// `true` si es un tombstone.
+    public var isDeleted: Bool { deletion != nil }
+
+    /// La marca de `name`, con `SyncStamp.legacyGroup` si no tiene.
+    public var effectiveNameStamp: SyncStamp { nameStamp ?? .legacyGroup }
+
+    /// El tombstone de este grupo: conserva solo el `id`.
+    public func tombstone(_ deletion: SyncStamp) -> ClipboardGroup {
+        var dead = ClipboardGroup(id: id, name: "")
+        dead.deletion = deletion
+        return dead
+    }
+
     public init(id: UUID = UUID(), name: String, isFilterEnabled: Bool = false) {
         self.id = id
         self.name = name
@@ -38,5 +66,7 @@ public struct ClipboardGroup: Identifiable, Codable, Sendable, Equatable {
         self.id = try c.decode(UUID.self, forKey: .id)
         self.name = try c.decode(String.self, forKey: .name)
         self.isFilterEnabled = try c.decodeIfPresent(Bool.self, forKey: .isFilterEnabled) ?? false
+        self.nameStamp = try c.decodeIfPresent(SyncStamp.self, forKey: .nameStamp)
+        self.deletion = try c.decodeIfPresent(SyncStamp.self, forKey: .deletion)
     }
 }

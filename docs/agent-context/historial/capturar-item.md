@@ -23,7 +23,7 @@ cambiado", así que se sondea `NSPasteboard.changeCount` una vez por segundo.
 4. `imageData()` prueba en orden: PNG crudo → TIFF crudo (a PNG, o el TIFF tal cual si
    la conversión falla) → `NSImage(pasteboard:)` para PDF, file-URLs y tipos prometidos.
 5. `ClipboardItem.image(pngData:)` escribe el fichero en `images/<uuid>.png` y guarda
-   solo el nombre; `ClipboardItem.text(_:)` guarda el texto ya trimmed.
+   el nombre y, si se escribió, el `imageHash` (SHA-256 de los bytes en claro); `ClipboardItem.text(_:)` guarda el texto ya trimmed.
 6. `store.add(_:)` deduplica, aplica el cap del tipo, re-ordena y persiste: la escritura
    pasa por `JSONPersistenceService`, que cifra el archivo antes de escribirlo (ver
    `arquitectura.md`, «Datos cifrados en disco»).
@@ -33,7 +33,11 @@ cambiado", así que se sondea `NSPasteboard.changeCount` una vez por segundo.
 - Imágenes de más de ~10 MB (`maxImageSize`) se descartan enteras.
 - El texto se guarda con trim; si queda vacío no se captura.
 - La deduplicación compara contenido: texto exacto, o el **SHA-256 de los bytes ya descifrados**
-  en imágenes (`imageDigest`, cacheado en memoria por nombre de archivo). Si alguna de las dos imágenes no se puede leer, no son duplicadas (si no, `add` borraría la existente).
+  en imágenes (`imageDigest`: el `imageHash` del item si lo tiene; si no, calculado y
+  cacheado en memoria por nombre de archivo). Antes de comparar una imagen,
+  `fillMissingImageHashes()` guarda el hash en las imágenes antiguas que no lo tenían.
+  El duplicado se sustituye por la captura, que **hereda su `id` y sus marcas** (ver
+  «Modelo sincronizable» en `_dominio.md`). Si alguna de las dos imágenes no se puede leer, no son duplicadas (si no, `add` borraría la existente).
 
 - Lo marcado como secreto por gestores de contraseñas (convención nspasteboard.org) nunca
   se captura. Los pegados de items protegidos de la propia app llevan `ConcealedType`, así

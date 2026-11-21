@@ -13,6 +13,8 @@ archivos:
   - Sources/ClipboardManagerKit/Security/ProtectedKey.swift
   - Sources/ClipboardManagerKit/Security/ProtectedTextCipher.swift
   - Sources/ClipboardManagerKit/UI/PopoverActions.swift
+  - Sources/ClipboardManagerKit/Sync/DeviceIdentity.swift
+  - Tests/ClipboardManagerKitTests/SyncMergeVectorTests.swift
   - ClipboardManager.xcodeproj/project.pbxproj
   - scripts/build-release.sh
 ---
@@ -201,7 +203,9 @@ el item lleva `textContent = nil` y el texto en `sealedText`. Solo
 - **Dos anfitriones**: si uno tuviera el entitlement y el otro no, el segundo no vería
   una privada creada en el llavero de protección de datos y no podría revelar (no
   pierde nada). Hoy ninguno lo tiene.
-- **Sincronización (§6, sin hacer)**: la `protectedKey` no sale del aparato, así que
+- **Sincronización (sin red todavía)**: el modelo local ya es sincronizable (§6:
+  marcas por campo, tombstones, `imageHash`, `SyncMerge`; ver `historial/_dominio.md`),
+  pero el texto protegido sigue sin resolver: la `protectedKey` no sale del aparato, así que
   un `sealedText` no se puede leer en otro. Al sincronizar habrá que decidir si el texto
   protegido viaja descifrado y recifrado con la llave del sync (exige autenticar en el
   aparato que lo sube) o cifrado hacia la pública de cada aparato (el par X25519 lo
@@ -262,9 +266,18 @@ xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager build
 `swift build` compila el paquete aislado y es la forma más rápida de comprobar que la
 frontera pública sigue en pie sin arrancar Xcode.
 
-**No hay suite de tests**: `tests/ClipboardManagerTests/` existe pero está vacía.
-`PersistenceService` es un protocolo y `JSONPersistenceService` acepta un `fileURL`
-propio precisamente para poder inyectarlo en tests cuando se escriban.
+**Tests del paquete con `swift test`** (en el Mac; en Linux no hay compilador). El
+target `ClipboardManagerKitTests` (`Tests/ClipboardManagerKitTests/`, declarado en
+`Package.swift`) pasa los vectores de fusión de `Tests/vectors/merge-vectors.json`
+por `SyncMerge` y prueba marcas y tombstones del store con una persistencia en
+memoria (`PersistenceService` es un protocolo) y un `deviceId` fijo. Solo items de
+texto sin proteger: no tocan el Llavero ni `images/`. Los vectores no usan recursos
+de SwiftPM: el test los busca desde su propio `#filePath`, para que el JSON quede en
+una carpeta neutra que Kotlin y Rust copien.
+
+El proyecto de Xcode no ve esos tests: su target `ClipboardManagerTests` apunta a
+`tests/ClipboardManagerTests/`, que no existe (en el disco del Mac, que no distingue
+mayúsculas, sería `Tests/ClipboardManagerTests/`, otra carpeta) y no tiene tests.
 
 ## Trampas
 
@@ -285,3 +298,8 @@ propio precisamente para poder inyectarlo en tests cuando se escriban.
   Lo mismo con `com.widomin.clipboard-manager.protected-key` para los textos
   protegidos: la app arranca, pero no puede revelarlos ni protege nada nuevo.
 - Preferencias sueltas en `UserDefaults`: `viewMode`, `popoverWidth`, `popoverHeight`.
+- `device-id` en la carpeta de datos es el `deviceId` de las marcas de cambio: un
+  UUID en claro, no secreto. Borrarlo solo hace que se cree otro; no se pierde nada.
+- `store.enc` y `groups.enc` guardan también los **tombstones** (lo borrado que fue
+  favorito, y los grupos borrados), sin contenido. Una versión anterior los enseñaría
+  como filas o grupos vacíos.
