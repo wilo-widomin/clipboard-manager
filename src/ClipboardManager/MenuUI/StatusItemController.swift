@@ -164,6 +164,8 @@ final class StatusItemController: NSObject {
 
     // MARK: - Paste
 
+    /// Un item protegido llega ya revelado por `ProtectedAccess.reveal` (su
+    /// texto en claro en `textContent`); el del almacén sigue cifrado.
     private func selectItem(_ item: ClipboardItem) {
         let target = pasteTarget
         closePopover()

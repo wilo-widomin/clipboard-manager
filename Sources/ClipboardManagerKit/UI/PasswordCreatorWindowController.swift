@@ -66,6 +66,9 @@ struct PasswordCreatorView: View {
     @State private var isProtected = true
     /// Empieza tapada: quien pase por detrás no debe verla. El ojo la destapa.
     @State private var isRevealed = false
+    /// Por qué no se pudo guardar (sin llave para cifrar una contraseña
+    /// protegida). El modal sigue abierto para no perder lo escrito.
+    @State private var saveError: String?
 
     // Opciones del generador.
     @State private var length: Double = 16
@@ -126,6 +129,13 @@ struct PasswordCreatorView: View {
             Toggle("Protegida", isOn: $isProtected)
                 .toggleStyle(.switch)
                 .help("Oculta el texto en la lista y pide autenticación para copiarlo o abrirlo")
+
+            if let saveError = saveError {
+                Text(saveError)
+                    .font(.callout)
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack {
                 Spacer()
@@ -222,13 +232,18 @@ struct PasswordCreatorView: View {
 
     private func save() {
         guard canSave else { return }
-        store.addManual(
+        let created = store.addManual(
             title: title,
             text: password,
             detail: note,
             groupID: groupID,
             isProtected: isProtected
         )
+        guard created != nil else {
+            saveError = "No se ha podido guardar: no hay llave para cifrar la contraseña protegida. "
+                + "No se ha creado nada."
+            return
+        }
         onClose()
     }
 }

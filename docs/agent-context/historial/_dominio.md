@@ -19,9 +19,10 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 ## Entidades
 
 - `ClipboardItem` (`Models/ClipboardItem.swift`) — `id`, `contentType` (.text/.image),
-  `createdAt`, `textContent` (nil en imágenes; `var`, lo edita el usuario),
-  `imageFilename` (nombre del PNG, **no** una ruta), `isFavorite`, `groupID?`,
-  `detail?`. `groupID` y `detail` son opcionales con default para que un `store.json`
+  `createdAt`, `textContent` (nil en imágenes **y en los protegidos**; `var`, lo edita
+  Willy), `imageFilename` (nombre del PNG, **no** una ruta), `isFavorite`, `groupID?`,
+  `detail?`, `title?`, `isProtected`, `sealedText?` (texto protegido cifrado, ver
+  [edicion-item](../edicion-item/_dominio.md)). `groupID` y `detail` son opcionales con default para que un `store.json`
   viejo decodifique: **cualquier campo nuevo debe seguir esa regla**.
 - `ImageStorage` (mismo archivo) — carpeta `…/ClipboardManager/images`; `delete` exige
   nombre pelado (rechaza `/`, anti-traversal). `write` cifra y escribe, `readData`
@@ -74,7 +75,10 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
   cada escritura lleva un nonce aleatorio.
 - `add` deduplica por contenido y **hereda `isFavorite`, `groupID` y `detail`** del
   duplicado que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el
-  monitor re-lee) le borraba el grupo y la nota escrita en el editor.
+  monitor re-lee) le borraba el grupo y la nota escrita en el editor. Un protegido
+  también hereda su `sealedText`, y contra un protegido solo se compara con la ventana
+  de gracia abierta (sin la llave privada no hay texto que comparar): fuera de ella la
+  captura entra como item nuevo.
 - Editar texto o detalle **no** cambia `createdAt` ni el orden, a propósito.
 - La fila de texto usa `textLine`: texto completo en una línea (espacios colapsados),
   y quien recorta es la vista con `lineLimit(1)` según el ancho real. `textPreview`

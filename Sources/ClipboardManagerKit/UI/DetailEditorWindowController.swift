@@ -23,6 +23,10 @@ public final class DetailEditorWindowController: NSObject {
     private var window: NSWindow?
 
     /// Opens the editor for `item`, writing changes back through `store`.
+    ///
+    /// Un item protegido tiene que llegar **ya revelado** (de
+    /// `ProtectedAccess.reveal`): el editor siembra el texto desde `item`, no
+    /// desde el almacén, donde va cifrado.
     public static func show(item: ClipboardItem, store: ClipboardStore) {
         let controller = DetailEditorWindowController()
         open.append(controller)
@@ -31,8 +35,7 @@ public final class DetailEditorWindowController: NSObject {
 
     private func present(item: ClipboardItem, store: ClipboardStore) {
         let root = DetailEditorView(
-            itemID: item.id,
-            isText: item.contentType == .text,
+            item: item,
             store: store,
             onClose: { [weak self] in self?.close() }
         )
@@ -85,18 +88,24 @@ struct DetailEditorView: View {
     /// Un item protegido enseña su texto como contraseña; el ojo lo destapa
     /// mientras dura la edición (para llegar aquí ya se ha autenticado).
     @State private var isRevealed = false
+    /// Por qué no se pudo guardar (p. ej. sin llave para cifrar el texto
+    /// protegido). La ventana sigue abierta para no perder lo escrito.
+    @State private var saveError: String?
 
-    init(itemID: ClipboardItem.ID, isText: Bool, store: ClipboardStore, onClose: @escaping () -> Void) {
-        self.itemID = itemID
-        self.isText = isText
+    /// `item` llega ya revelado si está protegido: su `textContent` es el texto
+    /// en claro, que en el almacén va cifrado.
+    init(item: ClipboardItem, store: ClipboardStore, onClose: @escaping () -> Void) {
+        self.itemID = item.id
+        self.isText = item.contentType == .text
         self._store = ObservedObject(wrappedValue: store)
         self.onClose = onClose
-        // Seed both editors from the item as it stands now.
-        let item = store.items.first(where: { $0.id == itemID })
-        self._content = State(initialValue: item?.textContent ?? "")
-        self._note = State(initialValue: item?.detail ?? "")
-        self._title = State(initialValue: item?.title ?? "")
-        self._isProtected = State(initialValue: item?.isProtected ?? false)
+        // Seed the editors: the text from the (revealed) item, the rest from
+        // the store as it stands now.
+        let current = store.items.first(where: { $0.id == item.id }) ?? item
+        self._content = State(initialValue: item.textContent ?? "")
+        self._note = State(initialValue: current.detail ?? "")
+        self._title = State(initialValue: current.title ?? "")
+        self._isProtected = State(initialValue: current.isProtected)
     }
 
     /// Blanking a text item would leave a ghost row, so Guardar is blocked
@@ -124,6 +133,13 @@ struct DetailEditorView: View {
             }
 
             section("Detalle", text: $note, minHeight: 120)
+
+            if let saveError = saveError {
+                Text(saveError)
+                    .font(.callout)
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack {
                 Spacer()
@@ -211,8 +227,13 @@ struct DetailEditorView: View {
     private func save() {
         guard canSave else { return }
         if isText {
-            store.setTextContent(id: itemID, text: content)
-            store.setProtection(id: itemID, isProtected: isProtected, title: title)
+            // Texto, protección y título de una vez: con el texto en claro en
+            // la mano, proteger o desproteger no necesita la llave privada.
+            guard store.setText(id: itemID, text: content, isProtected: isProtected, title: title) else {
+                saveError = "No se ha podido guardar: no hay llave para cifrar el texto protegido "
+                    + "(o el elemento ya no existe). No se ha cambiado nada."
+                return
+            }
         }
         store.setDetail(id: itemID, detail: note)
         onClose()

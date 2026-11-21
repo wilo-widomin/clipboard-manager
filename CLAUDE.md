@@ -49,7 +49,9 @@ Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 ├── Persistence/
 │   └── JSONPersistenceService.swift  — async JSON read/write cifrado (store.json + groups.json), migración, bloqueo
 ├── Security/
-│   ├── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min)
+│   ├── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min); `reveal` descifra
+│   ├── ProtectedKey.swift     — `protectedKey` (par X25519) en el Keychain; nunca crea otra si hay texto cifrado
+│   ├── ProtectedTextCipher.swift — cifra el texto de los items protegidos (X25519 + HKDF + AES-GCM)
 │   ├── PasswordGenerator.swift — generador de contraseñas (largo, tipos, símbolos extra)
 │   ├── LocalKey.swift         — `localKey` en el Keychain; nunca crea otra si hay datos cifrados
 │   ├── FileCipher.swift       — AES-256-GCM y formato de archivo cifrado
@@ -103,9 +105,9 @@ live in the status-item right-click menu).
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only), sealedText(optional: texto protegido cifrado; con él `textContent` es nil). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
-- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note).
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note; de un item protegido, solo título y nota).
 
 ## Groups
 
@@ -150,7 +152,7 @@ live in the status-item right-click menu).
   the note), for an **image** item only the note. The window is `.resizable` and both
   areas grow with it, because the captured text can be long.
 - Saving writes the note via `store.setDetail(id:detail:)` (whitespace-only clears it)
-  and, for text items, the content via `store.setTextContent(id:text:)` — stored
+  and, for text items, the content (with protection and title) via `store.setText(id:text:isProtected:title:)` — stored
   verbatim, **rejected if blank** (Guardar is disabled too, so an edit can't leave a
   ghost row), and it touches neither `createdAt` nor the order.
 - Rows show a `note.text` glyph (`DetailIndicator`) when the item has a detail,
@@ -160,19 +162,29 @@ live in the status-item right-click menu).
 - **Protected items** (text only): the editor has a `Protegido` switch plus a
   `title`. When protected the list shows the title (italic, with a lock) instead of
   the captured text, and both revealing actions — pasting the item and opening the
-  editor — go through `ProtectedAccess` (`deviceOwnerAuthentication`: Touch ID or the
-  macOS user password) with a **15-minute in-memory grace window**. Inside the editor
-  the captured text is a `SecureField`, toggled to a plain editor by the eye button.
-- The gate **hides, it does not encrypt by itself**: `store.json` is encrypted whole
-  with the `localKey`, but the app reads that key at launch without asking. Tying the
-  protected text to Touch ID with its own key is §3.2 of `docs/05-blueprint-sync-android.md`.
+  editor — go through `ProtectedAccess.reveal` (`deviceOwnerAuthentication`: Touch ID
+  or the macOS user password) with a **15-minute in-memory grace window**. Inside the
+  editor the captured text is a `SecureField`, toggled to a plain editor by the eye button.
+- **El texto protegido va cifrado con su propia llave** (§3.2 del blueprint): en
+  memoria y en `store.json` un item protegido tiene `textContent = nil` y el texto en
+  `sealedText`, cifrado con la `protectedKey` (par X25519: cifrar usa la pública y no
+  pide nada; descifrar usa la privada, que solo se saca tras autenticar y vive en
+  memoria lo que dura la ventana de gracia). `reveal` entrega al anfitrión una copia
+  con el texto en claro; el editor guarda con `store.setText(id:text:isProtected:title:)`.
+- **Qué impone macOS y qué la app**: la privada solo queda bajo `.userPresence`
+  impuesto por el sistema si la build tiene el entitlement del llavero de protección de
+  datos (perfil de aprovisionamiento). Firmada como hoy, sin perfil, cae al llavero de
+  sesión y quien exige Touch ID es la app. Detalle en `docs/agent-context/arquitectura.md`.
+- El buscador **no** mira el contenido de los protegidos (solo título y nota), y la
+  deduplicación contra un protegido solo funciona con la ventana de gracia abierta.
 
 ## Contraseñas creadas a mano
 
 - El pie «Nueva contraseña» de la pestaña Texto abre un modal (ventana propia) con
   título, contraseña, generador, detalle, grupo y `Protegida` (activada por defecto).
 - Guarda con `ClipboardStore.addManual`: un item de texto normal, **favorito** (para
-  esquivar el tope) y sin deduplicar. No hay tipo aparte.
+  esquivar el tope) y sin deduplicar. No hay tipo aparte. Si va protegida, nace ya
+  cifrada; sin llave para cifrarla no se crea y el modal lo dice.
 
 ## Code Standards
 

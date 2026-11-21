@@ -11,6 +11,7 @@
 
 import Foundation
 import Combine
+import CryptoKit
 
 /// The current display filter for the menu.
 public enum ClipboardViewMode: String, Codable, Sendable, Hashable {
@@ -73,14 +74,13 @@ public final class ClipboardStore: ObservableObject {
     /// Busca en los **tres campos de texto** del item: el contenido capturado,
     /// el título y la nota. Sin acentos y sin distinguir mayúsculas.
     ///
-    /// Un item protegido también se busca por su contenido aunque la fila no lo
-    /// enseñe: si no, un texto protegido sería imposible de encontrar y el
-    /// título tendría que repetir lo que se quiere esconder.
+    /// Un item protegido se busca **solo por título y nota**: su contenido va
+    /// cifrado y el buscador no tiene la llave (ni debe pedirla en cada tecla).
     public func matchesSearch(_ item: ClipboardItem) -> Bool {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return true }
         let needle = Self.fold(query)
-        return [item.textContent, item.title, item.detail]
+        return [item.isProtected ? nil : item.textContent, item.title, item.detail]
             .compactMap { $0 }
             .contains { Self.fold($0).contains(needle) }
     }
@@ -137,15 +137,81 @@ public final class ClipboardStore: ObservableObject {
         // Start every launch with the filter unselected (shows all), regardless
         // of whatever selection was last written to groups.json.
         groups = loadedGroups.map { var g = $0; g.isFilterEnabled = false; return g }
-        // Enforce the per-type limits on load too, so a store that grew past
-        // the limit under an older build (or a lowered limit) is normalised.
-        items = capAllTypes(sort(loaded))
-        hasLoadedFromDisk = true
+        adoptInitialState(loaded)
     }
 
     public func adoptInitialState(_ loaded: [ClipboardItem]) {
-        items = capAllTypes(sort(loaded))
+        let migration = sealLegacyProtectedTexts(loaded)
+        // Enforce the per-type limits on load too, so a store that grew past
+        // the limit under an older build (or a lowered limit) is normalised.
+        items = capAllTypes(sort(migration.items))
         hasLoadedFromDisk = true
+        if migration.changed { persist() }
+    }
+
+    // MARK: - Texto protegido
+
+    /// Migración de los items protegidos de versiones anteriores, que traen el
+    /// texto en claro: se cifra con la `protectedKey` (creándola si hace falta,
+    /// sin pedir autenticación) y se quita el claro. Solo en memoria; lo
+    /// escribe el `persist()` de quien llama, de una vez y de forma atómica, así
+    /// que morir a mitad deja el archivo anterior intacto y se repite en el
+    /// siguiente arranque. Si la llave no se puede obtener, no se toca nada: el
+    /// item sigue protegido en la interfaz como antes y se reintenta después.
+    private func sealLegacyProtectedTexts(_ list: [ClipboardItem]) -> (items: [ClipboardItem], changed: Bool) {
+        let needsSealing: (ClipboardItem) -> Bool = {
+            $0.isProtected && $0.contentType == .text && $0.sealedText == nil && $0.textContent != nil
+        }
+        guard list.contains(where: needsSealing),
+              let publicKey = protectedPublicKey(sealedTextExists: list.contains { $0.sealedText != nil })
+        else { return (list, false) }
+
+        var result = list
+        var changed = false
+        for index in result.indices where needsSealing(result[index]) {
+            guard let text = result[index].textContent else { continue }
+            do {
+                result[index].sealedText = try ProtectedTextCipher.seal(text, to: publicKey)
+                result[index].textContent = nil
+                changed = true
+            } catch {
+                NSLog("ClipboardManager: no se pudo cifrar un elemento protegido antiguo: \(error.localizedDescription)")
+            }
+        }
+        if changed { NSLog("ClipboardManager: elementos protegidos antiguos cifrados con la protectedKey") }
+        return (result, changed)
+    }
+
+    private func protectedPublicKey(sealedTextExists: Bool) -> Curve25519.KeyAgreement.PublicKey? {
+        do {
+            return try ProtectedKey.shared.publicKey(sealedTextExists: sealedTextExists)
+        } catch {
+            NSLog("ClipboardManager: sin llave para los elementos protegidos: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Cifra el texto de un item protegido. `nil` si no hay llave: quien llama
+    /// no debe guardar nada en ese caso.
+    private func sealProtectedText(_ text: String) -> String? {
+        guard let publicKey = protectedPublicKey(sealedTextExists: items.contains { $0.sealedText != nil }) else {
+            return nil
+        }
+        do {
+            return try ProtectedTextCipher.seal(text, to: publicKey)
+        } catch {
+            NSLog("ClipboardManager: no se pudo cifrar el texto protegido: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// El texto en claro de un item de texto, si se puede tener sin
+    /// preguntar: el de un item normal, o el de uno protegido solo mientras la
+    /// ventana de gracia mantiene la llave en memoria.
+    private func plainTextIfAvailable(_ item: ClipboardItem) -> String? {
+        guard let sealed = item.sealedText else { return item.textContent }
+        guard ProtectedAccess.isUnlocked, let privateKey = ProtectedKey.shared.cachedPrivateKey else { return nil }
+        return try? ProtectedTextCipher.open(sealed, with: privateKey)
     }
 
     // MARK: - Mutations
@@ -163,12 +229,20 @@ public final class ClipboardStore: ObservableObject {
         // su grupo y lo escrito en el editor — si no, la copia recién leída,
         // que no tiene nada de eso, sustituiría a la vieja y el dato guardado a
         // mano desaparecería en silencio.
+        //
+        // Un item protegido hereda también su texto cifrado (es el mismo texto
+        // que el capturado: por eso son duplicados), así que la copia nueva no
+        // queda en claro.
         if let existing = items.first(where: { isDuplicate($0, of: incoming) }) {
             incoming.isFavorite = existing.isFavorite
             incoming.groupID = existing.groupID
             incoming.detail = existing.detail
             incoming.title = existing.title
             incoming.isProtected = existing.isProtected
+            if let sealed = existing.sealedText {
+                incoming.sealedText = sealed
+                incoming.textContent = nil
+            }
             purge(id: existing.id)
         }
 
@@ -183,11 +257,18 @@ public final class ClipboardStore: ObservableObject {
 
     /// True when two items hold the same content (same text, or same image
     /// bytes). Favourite flag and creation date are ignored.
+    ///
+    /// `b` es la captura nueva (siempre en claro). Contra un item protegido
+    /// solo se puede comparar mientras la ventana de gracia tiene la llave en
+    /// memoria; fuera de ella **no se deduplica**: la captura entra como item
+    /// nuevo del historial y el protegido no cambia. Comparar con un resumen
+    /// sin llave permitiría adivinar el texto protegido probando candidatos.
     private func isDuplicate(_ a: ClipboardItem, of b: ClipboardItem) -> Bool {
         guard a.contentType == b.contentType else { return false }
         switch a.contentType {
         case .text:
-            return a.textContent == b.textContent
+            guard let incomingText = b.textContent else { return false }
+            return plainTextIfAvailable(a) == incomingText
         case .image:
             return imageBytes(a) == imageBytes(b)
         }
@@ -279,13 +360,41 @@ public final class ClipboardStore: ObservableObject {
     /// Rewrites the captured text of a text item (the right-click editor). Stored
     /// verbatim — only the emptiness check is trimmed, and a blank result is
     /// rejected rather than leaving a ghost row. Neither the date nor the order
-    /// change: editing shouldn't bump an item to the top.
+    /// change: editing shouldn't bump an item to the top. Un item protegido
+    /// sigue protegido y su texto nuevo se guarda cifrado.
     public func setTextContent(id: ClipboardItem.ID, text: String) {
+        guard let item = items.first(where: { $0.id == id }) else { return }
+        setText(id: id, text: text, isProtected: item.isProtected, title: item.title ?? "")
+    }
+
+    /// Guarda de una vez el texto, la protección y el título de un item de
+    /// texto (lo que hace Guardar en el editor). Con `isProtected` el texto se
+    /// cifra con la `protectedKey` y no queda en claro ni en memoria; sin él se
+    /// guarda en claro y se descarta el cifrado.
+    ///
+    /// Devuelve `false` sin tocar nada si el texto está en blanco, si se
+    /// protege sin título o si no hay llave para cifrar: nunca se guarda en
+    /// claro un texto que se pidió proteger.
+    @discardableResult
+    public func setText(id: ClipboardItem.ID, text: String, isProtected: Bool, title: String) -> Bool {
         guard let idx = items.firstIndex(where: { $0.id == id }),
               items[idx].contentType == .text,
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        items[idx].textContent = text
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isProtected && trimmedTitle.isEmpty { return false }
+
+        if isProtected {
+            guard let sealed = sealProtectedText(text) else { return false }
+            items[idx].sealedText = sealed
+            items[idx].textContent = nil
+        } else {
+            items[idx].textContent = text
+            items[idx].sealedText = nil
+        }
+        items[idx].isProtected = isProtected
+        items[idx].title = trimmedTitle.isEmpty ? nil : trimmedTitle
         persist()
+        return true
     }
 
     /// Sets (or clears) the free-text detail note on an item. Whitespace-only
@@ -305,14 +414,17 @@ public final class ClipboardStore: ObservableObject {
     /// que esconder su texto no protegería nada. Proteger sin título dejaría la
     /// fila sin nada que mostrar, así que se exige título; al desproteger, el
     /// título se conserva por si vuelve a activarse.
-    public func setProtection(id: ClipboardItem.ID, isProtected: Bool, title: String) {
-        guard let idx = items.firstIndex(where: { $0.id == id }),
-              items[idx].contentType == .text else { return }
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if isProtected && trimmed.isEmpty { return }
-        items[idx].isProtected = isProtected
-        items[idx].title = trimmed.isEmpty ? nil : trimmed
-        persist()
+    ///
+    /// Proteger cifra el texto (no pide autenticación). Desproteger necesita
+    /// el texto en claro, así que solo funciona con la ventana de gracia
+    /// abierta; el editor usa `setText`, que ya trae el texto. Devuelve `false`
+    /// si no ha cambiado nada.
+    @discardableResult
+    public func setProtection(id: ClipboardItem.ID, isProtected: Bool, title: String) -> Bool {
+        guard let item = items.first(where: { $0.id == id }),
+              item.contentType == .text,
+              let text = plainTextIfAvailable(item) else { return false }
+        return setText(id: id, text: text, isProtected: isProtected, title: title)
     }
 
     /// Crea a mano un item de texto que nunca pasó por el portapapeles (una
@@ -322,7 +434,8 @@ public final class ClipboardStore: ObservableObject {
     /// no, el historial acabaría borrándolo. No pasa por la deduplicación de
     /// `add`: no es una captura, y no debe fundirse con otro item igual.
     /// Se rechaza (devuelve `nil`) un texto en blanco o, si va protegido, sin
-    /// título, por las mismas razones que `setTextContent` y `setProtection`.
+    /// título, por las mismas razones que `setTextContent` y `setProtection`; y
+    /// también, si va protegido, cuando no hay llave para cifrarlo.
     @discardableResult
     public func addManual(
         title: String,
@@ -338,6 +451,11 @@ public final class ClipboardStore: ObservableObject {
         var item = ClipboardItem.text(text)
         item.isFavorite = true
         item.isProtected = isProtected
+        if isProtected {
+            guard let sealed = sealProtectedText(text) else { return nil }
+            item.sealedText = sealed
+            item.textContent = nil
+        }
         item.title = trimmedTitle.isEmpty ? nil : trimmedTitle
         let note = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         item.detail = note.isEmpty ? nil : note
