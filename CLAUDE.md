@@ -193,7 +193,8 @@ live in the status-item right-click menu).
   the captured text, and both revealing actions — pasting the item and opening the
   editor — go through `ProtectedAccess.reveal` (`deviceOwnerAuthentication`: Touch ID
   or the macOS user password) with a **15-minute in-memory grace window**. Inside the
-  editor the captured text is a `SecureField`, toggled to a plain editor by the eye button.
+  editor the captured text is a `SecureField`, toggled to a plain editor by the eye button. Protecting an item that wasn't protected
+  also makes it a **favourite** (so the per-type cap can't evict it); un-protecting keeps the star.
 - **El texto protegido va cifrado con su propia llave** (§3.2 del blueprint): en
   memoria y en `store.enc` un item protegido tiene `textContent = nil` y el texto en
   `sealedText`, cifrado con la `protectedKey` (par X25519: cifrar usa la pública y no

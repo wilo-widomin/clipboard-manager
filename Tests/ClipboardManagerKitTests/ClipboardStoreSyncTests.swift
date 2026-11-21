@@ -108,6 +108,30 @@ final class ClipboardStoreSyncTests: XCTestCase {
     }
 
     @MainActor
+    func testProtectingThroughEditorMakesItemFavouriteAndStampsIt() async {
+        // Cifrado de pega: la prueba no toca el Llavero.
+        let store = ClipboardStore(
+            persistence: MemoryPersistence(), deviceId: device, textSealer: { "sellado:" + $0 }
+        )
+        await store.load()
+        store.add(.text("clave"))
+        let id = store.items[0].id
+        XCTAssertFalse(store.items[0].isFavorite)
+        XCTAssertNil(store.items[0].stamps.favorite)
+
+        XCTAssertTrue(store.setText(id: id, text: "clave", isProtected: true, title: "Banco"))
+        XCTAssertTrue(store.items[0].isProtected)
+        XCTAssertTrue(store.items[0].isFavorite)
+        XCTAssertEqual(store.items[0].stamps.favorite?.deviceId, device)
+
+        // Desproteger no quita la estrella ni cambia su marca.
+        let favouriteStamp = store.items[0].stamps.favorite
+        XCTAssertTrue(store.setText(id: id, text: "clave", isProtected: false, title: "Banco"))
+        XCTAssertTrue(store.items[0].isFavorite)
+        XCTAssertEqual(store.items[0].stamps.favorite, favouriteStamp)
+    }
+
+    @MainActor
     func testUnfavouriteKeepsItemAndCapLeavesTombstone() async {
         let store = await makeStore(MemoryPersistence())
         store.add(.text("fue favorito"))
