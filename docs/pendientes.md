@@ -23,5 +23,7 @@ pasa a «Hecho» en el mismo cambio.
 
 - **Arreglos de seguridad del Mac** (21-11-2026): historial, grupos e imágenes cifrados;
   contraseñas protegidas con su propia llave; lo copiado desde un gestor de contraseñas
-  no se guarda. Con la versión 1.10.2 Willy ve sus datos bien; faltan las pruebas
-  de `prueba-seguridad-mac.md` (de la 3 a la 9).
+  no se guarda, tampoco desde el llavero de Apple. Willy pasó todas las pruebas de
+  `prueba-seguridad-mac.md` el 21-11-2026.
+- **Ventana del editor** (21-11-2026): un item ya abierto no abre otra ventana; la que
+  hay vuelve al frente aunque esté tapada o minimizada. Probado por Willy.
