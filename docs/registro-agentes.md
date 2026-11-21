@@ -60,3 +60,9 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 |---|---|---|---|---|---|
 | 2026-11-21 14:30 | 2026-11-21 14:31 | `proteger-es-favorito` | Sonnet | Proteger un item del historial desde el editor ya no lo marca como favorito (antes sí). Encontrar dónde se perdió, devolverlo y añadir un test. Rama propia. | Hecho y mezclado; sin compilar. No encontró en el historial del código dónde se hacía antes. Ahora proteger marca favorito; desproteger no quita la estrella. Test nuevo. |
 | 2026-11-21 14:34 | 2026-11-21 14:35 | `editar-es-favorito` | Sonnet | Regla de Willy: guardar cualquier cambio en el editor (texto, nota, título o protección) convierte el item en favorito. Con tests. Rama propia. | Hecho y mezclado; sin compilar. Tres tests nuevos. |
+
+## Servidor de sincronización (plan §8)
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-21 15:13 | — | `servidor-sync` | Opus | Repo nuevo `clipboard-sync-server` (local, sin subir): buzón en Rust (axum + SQLite) con cambios cifrados, imágenes, emparejamiento, baja de aparatos, primer arranque y poda; tests de integración; Dockerfile, compose de preproducción detrás de Caddy, guía de despliegue y contrato de la API. Compila y prueba dentro de Docker. | en curso |
