@@ -52,10 +52,41 @@ public final class ClipboardMonitor {
         NSPasteboard.PasteboardType("net.antelle.keeweb"),
     ]
 
+    /// Gestores de contraseñas conocidos. Las apps de Apple (Acceso a Llaveros,
+    /// Contraseñas) no ponen las marcas de nspasteboard.org, así que se mira
+    /// qué app está al frente cuando se detecta el cambio: con el sondeo de
+    /// 1 Hz casi siempre sigue siendo la que ha copiado.
+    private static let passwordManagerBundleIDs: Set<String> = [
+        "com.apple.keychainaccess",
+        "com.apple.Passwords",
+        "com.apple.Passwords-Settings.extension",
+        "com.agilebits.onepassword7",
+        "com.agilebits.onepassword-osx-helper",
+        "com.1password.1password",
+        "com.1password.1password7",
+        "com.bitwarden.desktop",
+        "in.sinew.Enpass-Desktop",
+        "org.keepassxc.keepassxc",
+        "org.keepassx.keepassx",
+        "com.lastpass.LastPass",
+        "com.dashlane.dashlanephonefinal",
+        "com.dashlane.Dashlane",
+        "com.nordsec.nordpass",
+        "com.protonpass.pass.macos",
+        "com.stricahq.strongbox",
+        "com.markmcguill.strongbox.mac",
+    ]
+
     private func readPasteboard() {
         // Persistencia bloqueada (datos que no se pudieron leer): no se captura
         // nada, ni siquiera se escribe la imagen.
         guard !store.isPersistenceBlocked else { return }
+
+        // Copiado desde un gestor de contraseñas: no se captura nada.
+        if let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+           Self.passwordManagerBundleIDs.contains(bundleID) {
+            return
+        }
 
         // Contenido marcado como secreto o efímero: no se captura nada.
         if let types = pasteboard.types, types.contains(where: { Self.secretTypes.contains($0) }) {
