@@ -19,12 +19,15 @@ macOS menubar app for clipboard history — text & images, favorites, groups.
 - **Resizable popover**: a reserved 8px border on the right/bottom holds drag handles
   (right edge = width, bottom edge = height, corner = both). The size is persisted in
   UserDefaults and drives `preferredContentSize` via `NSHostingController.sizingOptions`.
-- **JSON persistence** via Codable in `~/Library/Application Support/ClipboardManager/store.json`,
-  **cifrado** con AES-256-GCM (CryptoKit) igual que `groups.json` e `images/*`. La `localKey`
+- **JSON persistence** via Codable in `~/Library/Application Support/ClipboardManager/store.enc`,
+  **cifrado** con AES-256-GCM (CryptoKit) igual que `groups.enc` e `images/*`. La `localKey`
   (32 bytes) vive en el llavero de sesión (servicio fijo `com.widomin.clipboard-manager.local-key`,
-  compartido con Widomin). Formato: `CLPE` + versión + `SealedBox.combined`. Los archivos en claro
-  antiguos se migran en `load()`. Si algo existente no se puede leer, la persistencia se bloquea y
-  no escribe nada (`blockingError`); la app avisa y se cierra. Detalle en `docs/agent-context/arquitectura.md`.
+  compartido con Widomin). Formato: `CLPE` + versión + `SealedBox.combined`. Los cifrados **no** se
+  llaman `store.json`/`groups.json` a propósito: así una versión antigua de la app no los pisa. Un
+  `store.json`/`groups.json` que aparezca (en claro o cifrado) se funde por `id` en el `.enc` en
+  `load()` y se borra. Si algo existente no se puede leer, la persistencia se bloquea y no escribe
+  nada (`blockingError`, parte del protocolo `PersistenceService`); el store deja de añadir y la app
+  avisa y se cierra. El icono no aparece hasta que `load()` termina. Detalle en `docs/agent-context/arquitectura.md`.
 - **1 Hz polling** of `NSPasteboard.changeCount` for clipboard monitoring
 - **macOS 13+** minimum target
 - **LSUIElement = YES** (agent app, no Dock)
@@ -47,7 +50,7 @@ Sources/ClipboardManagerKit/   — SHARED: everything both hosts need
 ├── Monitor/
 │   └── ClipboardMonitor.swift — polls changeCount, reads text or TIFF/PNG
 ├── Persistence/
-│   └── JSONPersistenceService.swift  — async JSON read/write cifrado (store.json + groups.json), migración, bloqueo
+│   └── JSONPersistenceService.swift  — async JSON read/write cifrado (store.enc + groups.enc), fusión de los .json antiguos, bloqueo
 ├── Security/
 │   ├── ProtectedAccess.swift  — Touch ID / contraseña del Mac + ventana de gracia (15 min); `reveal` descifra
 │   ├── ProtectedKey.swift     — `protectedKey` (par X25519) en el Keychain; nunca crea otra si hay texto cifrado
@@ -106,7 +109,7 @@ live in the status-item right-click menu).
 ## Models
 
 - **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only), sealedText(optional: texto protegido cifrado; con él `textContent` es nil). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
-- **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.json`.
+- **ClipboardGroup**: id, name, isFilterEnabled. Persisted separately in `groups.enc`.
 - **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note; de un item protegido, solo título y nota).
 
 ## Groups
@@ -166,7 +169,7 @@ live in the status-item right-click menu).
   or the macOS user password) with a **15-minute in-memory grace window**. Inside the
   editor the captured text is a `SecureField`, toggled to a plain editor by the eye button.
 - **El texto protegido va cifrado con su propia llave** (§3.2 del blueprint): en
-  memoria y en `store.json` un item protegido tiene `textContent = nil` y el texto en
+  memoria y en `store.enc` un item protegido tiene `textContent = nil` y el texto en
   `sealedText`, cifrado con la `protectedKey` (par X25519: cifrar usa la pública y no
   pide nada; descifrar usa la privada, que solo se saca tras autenticar y vive en
   memoria lo que dura la ventana de gracia). `reveal` entrega al anfitrión una copia

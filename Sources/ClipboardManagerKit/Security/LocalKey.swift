@@ -2,8 +2,8 @@
 //  LocalKey.swift
 //  ClipboardManager
 //
-//  `localKey`: la llave AES-256 de este Mac con la que se cifran store.json,
-//  groups.json y las imágenes. 32 bytes aleatorios, creados la primera vez y
+//  `localKey`: la llave AES-256 de este Mac con la que se cifran store.enc,
+//  groups.enc y las imágenes. 32 bytes aleatorios, creados la primera vez y
 //  guardados en el Keychain como contraseña genérica. Nunca sale del aparato y
 //  no es la llave del sync (ver docs/05-blueprint-sync-android.md, §3.1).
 //
@@ -168,11 +168,14 @@ final class LocalKey: @unchecked Sendable {
     // MARK: - Datos en disco
 
     /// `true` si algún archivo de datos ya está cifrado: los de la carpeta
-    /// estándar (store.json, groups.json, images/*) y los extra.
+    /// estándar (store.enc, groups.enc, los antiguos store.json y groups.json, images/*) y los extra.
     private func encryptedDataExists(extraFiles: [URL]) -> Bool {
         var candidates = extraFiles
         if let imagesDirectory = ImageStorage.directoryURL {
             let dataDirectory = imagesDirectory.deletingLastPathComponent()
+            candidates.append(dataDirectory.appendingPathComponent("store.enc"))
+            candidates.append(dataDirectory.appendingPathComponent("groups.enc"))
+            // Los nombres antiguos: una build sin publicar los escribía cifrados.
             candidates.append(dataDirectory.appendingPathComponent("store.json"))
             candidates.append(dataDirectory.appendingPathComponent("groups.json"))
             let names = (try? FileManager.default.contentsOfDirectory(atPath: imagesDirectory.path)) ?? []

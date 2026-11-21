@@ -132,3 +132,48 @@ enum ProtectedTextCipher {
                                               outputByteCount: 32)
     }
 }
+
+// MARK: - Migración de items protegidos antiguos
+
+extension ProtectedTextCipher {
+
+    /// Cifra con la `protectedKey` el texto de los items protegidos que aún lo
+    /// traen en claro (versiones anteriores a §3.2) y lo quita del claro. Crea
+    /// la llave si hace falta, sin pedir autenticación. Si la llave no se puede
+    /// obtener no toca nada: el item sigue protegido en la interfaz como antes y
+    /// se reintenta en el siguiente arranque.
+    ///
+    /// No escribe: devuelve la lista nueva y si ha cambiado algo, y quien llama
+    /// guarda. La usan `ClipboardStore.adoptInitialState` y la fusión de un
+    /// `store.json` heredado en `JSONPersistenceService`. Se puede llamar desde
+    /// cualquier hilo.
+    static func sealLegacyProtectedTexts(_ list: [ClipboardItem]) -> (items: [ClipboardItem], changed: Bool) {
+        let needsSealing: (ClipboardItem) -> Bool = {
+            $0.isProtected && $0.contentType == .text && $0.sealedText == nil && $0.textContent != nil
+        }
+        guard list.contains(where: needsSealing) else { return (list, false) }
+
+        let publicKey: Curve25519.KeyAgreement.PublicKey
+        do {
+            publicKey = try ProtectedKey.shared.publicKey(sealedTextExists: list.contains { $0.sealedText != nil })
+        } catch {
+            NSLog("ClipboardManager: sin llave para los elementos protegidos: \(error.localizedDescription)")
+            return (list, false)
+        }
+
+        var result = list
+        var changed = false
+        for index in result.indices where needsSealing(result[index]) {
+            guard let text = result[index].textContent else { continue }
+            do {
+                result[index].sealedText = try seal(text, to: publicKey)
+                result[index].textContent = nil
+                changed = true
+            } catch {
+                NSLog("ClipboardManager: no se pudo cifrar un elemento protegido antiguo: \(error.localizedDescription)")
+            }
+        }
+        if changed { NSLog("ClipboardManager: elementos protegidos antiguos cifrados con la protectedKey") }
+        return (result, changed)
+    }
+}

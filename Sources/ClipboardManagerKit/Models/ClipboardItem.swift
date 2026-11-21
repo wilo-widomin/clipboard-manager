@@ -223,9 +223,30 @@ public enum ImageStorage {
         try? FileManager.default.removeItem(at: fileURL)
     }
 
+    private static let writesLock = NSLock()
+    private static var writesBlocked = false
+
+    /// `true` desde que la persistencia se ha bloqueado (datos que no se
+    /// pudieron leer, llave que no está). Con él `write` no escribe nada.
+    static var areWritesBlocked: Bool {
+        writesLock.lock()
+        defer { writesLock.unlock() }
+        return writesBlocked
+    }
+
+    /// Lo llama `JSONPersistenceService` al bloquearse. No hay vuelta atrás en
+    /// la misma ejecución, igual que con el resto de la persistencia.
+    static func blockWrites() {
+        writesLock.lock()
+        defer { writesLock.unlock() }
+        writesBlocked = true
+    }
+
     /// Cifra los bytes de la imagen y los escribe de forma atómica. Lanza si
-    /// no hay llave o no se puede escribir; nunca deja el PNG en claro.
+    /// la persistencia está bloqueada, si no hay llave o si no se puede
+    /// escribir; nunca deja el PNG en claro.
     public static func write(pngData: Data, filename: String) throws {
+        guard !areWritesBlocked else { throw PersistenceError.writesBlocked }
         guard let dir = directoryURL else { throw CocoaError(.fileNoSuchFile) }
         guard !filename.contains("/") else { throw CocoaError(.fileWriteInvalidFileName) }
         let key = try LocalKey.shared.key()

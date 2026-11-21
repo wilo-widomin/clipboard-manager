@@ -28,8 +28,8 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
   nombre pelado (rechaza `/`, anti-traversal). `write` cifra y escribe, `readData`
   descifra (o devuelve tal cual un PNG en claro aún sin migrar) y `loadImage` lo
   convierte en `NSImage` con una caché en memoria por nombre de archivo.
-- Persistencia (`JSONPersistenceService`) — `store.json` y `groups.json` cifrados
-  con AES-256-GCM; migra el formato en claro y se bloquea si algo existente no se
+- Persistencia (`JSONPersistenceService`) — `store.enc` y `groups.enc` cifrados
+  con AES-256-GCM; funde en ellos un `store.json`/`groups.json` antiguo (en claro o no) y se bloquea si algo existente no se
   puede leer. El detalle está en [arquitectura](../arquitectura.md#datos-cifrados-en-disco).
 - `ClipboardStore` — `@Published items` + `groups`, `viewMode` (persistido en
   UserDefaults), `visibleItems` (filtra por vista, por grupo **y** por el buscador —
@@ -50,6 +50,8 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - Cada mutación pública persiste; `purge` es la excepción privada (no persiste, lo
   hace quien la llama). Hasta que `load()` o `adoptInitialState` terminan, `persist`
   y `persistGroups` no hacen nada: guardar antes pisaría el archivo con menos items.
+  Con la persistencia bloqueada (`isPersistenceBlocked`, que lee `blockingError` del
+  protocolo) tampoco guardan, y `add`, `addManual` y `addGroup` no hacen nada.
 
 - Hay **dos entradas** de items: `add` (lo captura el monitor; deduplica) y `addManual`
   (el modal «Nueva contraseña»; ver [edicion-item](../edicion-item/_dominio.md)). Este
