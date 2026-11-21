@@ -20,6 +20,9 @@ pasa a «Hecho» en el mismo cambio.
   resucite desde otro aparato. Hoy no se limpian nunca: ocupan muy poco, pero cuando haya
   sincronización hay que borrarlas cuando todos los aparatos las tengan (propuesta: y, como
   mucho, a los 90 días). Detalle en `docs/agent-context/historial/_dominio.md`.
+- **Dos avisos del compilador** (no son errores; salieron en `swift test` el 21-11-2026):
+  `PasteTargetTracker.swift:104` y `ProtectedAccess.swift:137`, de concurrencia. Limpiarlos
+  cuando se toque esa zona.
 - **Lo que el plan deja abierto** (§12 de `05-blueprint-sync-android.md`): cómo se
   desbloquea un protegido en Linux, cómo se meten imágenes desde Android, en qué
   lenguaje va el servidor y el túnel para sincronizar fuera de casa.
