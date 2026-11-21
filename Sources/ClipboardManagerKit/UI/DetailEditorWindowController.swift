@@ -17,10 +17,12 @@ import SwiftUI
 @MainActor
 public final class DetailEditorWindowController: NSObject {
 
-    /// Retains live controllers so their windows aren't deallocated.
-    private static var open: [DetailEditorWindowController] = []
+    /// Editores abiertos, por id de item: retiene los controladores (para que
+    /// sus ventanas no se liberen) y evita abrir dos editores del mismo item.
+    private static var open: [ClipboardItem.ID: DetailEditorWindowController] = [:]
 
     private var window: NSWindow?
+    private var itemID: ClipboardItem.ID?
 
     /// Opens the editor for `item`, writing changes back through `store`.
     ///
@@ -28,9 +30,27 @@ public final class DetailEditorWindowController: NSObject {
     /// `ProtectedAccess.reveal`): el editor siembra el texto desde `item`, no
     /// desde el almacén, donde va cifrado.
     public static func show(item: ClipboardItem, store: ClipboardStore) {
+        // Si ese item ya tiene editor, no se abre otro: se trae al frente el
+        // que hay (aunque esté tapado, minimizado o como pestaña de otro).
+        if let existing = open[item.id], existing.window != nil {
+            existing.bringToFront()
+            return
+        }
         let controller = DetailEditorWindowController()
-        open.append(controller)
+        open[item.id] = controller
         controller.present(item: item, store: store)
+    }
+
+    /// Una app `LSUIElement` no está activa al abrirse la ventana: sin activar
+    /// la app, `makeKeyAndOrderFront` la deja detrás de las demás.
+    private func bringToFront() {
+        guard let win = window else { return }
+        if win.isMiniaturized { win.deminiaturize(nil) }
+        NSApp.activate(ignoringOtherApps: true)
+        // Si el tabbing automático la agrupó, esto selecciona su pestaña.
+        win.tabGroup?.selectedWindow = win
+        win.makeKeyAndOrderFront(nil)
+        win.orderFrontRegardless()
     }
 
     private func present(item: ClipboardItem, store: ClipboardStore) {
@@ -47,12 +67,14 @@ public final class DetailEditorWindowController: NSObject {
         win.styleMask = [.titled, .closable, .resizable]
         win.isReleasedWhenClosed = false
         win.delegate = self
+        // Cada item tiene su ventana: nada de agruparlas como pestañas.
+        win.tabbingMode = .disallowed
         win.setContentSize(NSSize(width: 460, height: item.contentType == .text ? 520 : 320))
         win.center()
 
         self.window = win
-        win.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        self.itemID = item.id
+        bringToFront()
     }
 
     private func close() {
@@ -65,7 +87,9 @@ extension DetailEditorWindowController: NSWindowDelegate {
     /// protocol: a witness can't be less visible than the conformance.
     public func windowWillClose(_ notification: Notification) {
         window = nil
-        DetailEditorWindowController.open.removeAll { $0 === self }
+        if let id = itemID, DetailEditorWindowController.open[id] === self {
+            DetailEditorWindowController.open[id] = nil
+        }
     }
 }
 
