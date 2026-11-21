@@ -21,7 +21,10 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
 ## Entidades
 
 - `DetailEditorWindowController` — ciclo de vida de la ventana; se auto-retiene en el
-  array estático `open` y se suelta en `windowWillClose`.
+  diccionario estático `open` (id del item → controlador) y se suelta en
+  `windowWillClose`. Un item tiene **un solo editor**: abrirlo otra vez trae al frente
+  el que hay (`bringToFront`: sale de minimizado, activa la app, `orderFrontRegardless`).
+  Las ventanas llevan `tabbingMode = .disallowed`, así que nunca se agrupan en pestañas.
 - `DetailEditorView` — dos `TextEditor` (texto y nota) para items de texto, solo la
   nota para imágenes; `canSave` bloquea Guardar si el texto queda en blanco, y
   también si está protegido sin título. Con `isProtected` el texto capturado se
@@ -101,6 +104,10 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
   o, si va protegido, sin título. No tiene estado propio: es un item de texto normal.
 
 ## Trampas
+
+- Reabrir el editor de un item protegido sigue pasando por `ProtectedAccess.reveal`
+  (dentro de la ventana de gracia no pide el dedo); si el editor ya estaba abierto, solo
+  se trae al frente y no se reemplaza su contenido.
 
 - La ventana es propia, no una sheet ni una vista dentro del popover: al tomar el foco,
   cerraría el popover (que se cierra con el monitor global de clic-fuera).
