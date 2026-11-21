@@ -23,7 +23,9 @@ cambiado", así que se sondea `NSPasteboard.changeCount` una vez por segundo.
    la conversión falla) → `NSImage(pasteboard:)` para PDF, file-URLs y tipos prometidos.
 5. `ClipboardItem.image(pngData:)` escribe el fichero en `images/<uuid>.png` y guarda
    solo el nombre; `ClipboardItem.text(_:)` guarda el texto ya trimmed.
-6. `store.add(_:)` deduplica, aplica el cap del tipo, re-ordena y persiste.
+6. `store.add(_:)` deduplica, aplica el cap del tipo, re-ordena y persiste: la escritura
+   pasa por `JSONPersistenceService`, que cifra el archivo antes de escribirlo (ver
+   `arquitectura.md`, «Datos cifrados en disco»).
 
 ## Reglas
 
