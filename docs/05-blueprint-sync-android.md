@@ -180,13 +180,27 @@ credencial del aparato (Touch ID, huella, patrón, contraseña del sistema).
 El borrador anterior mostraba la `masterKey` en un QR: una foto de la pantalla bastaba
 para robarla. Ahora se hace como Signal o 1Password:
 
-1. El aparato nuevo genera un par de llaves X25519 y deja su parte pública en el
-   servidor, en un buzón de emparejamiento que caduca en pocos minutos.
-2. Un aparato ya emparejado la recoge, cifra la `masterKey` hacia ella y la devuelve
-   por el mismo buzón, junto con el token de servidor del aparato nuevo.
-3. Los dos aparatos enseñan un **número de seis cifras** calculado a partir de las dos
-   llaves públicas. Willy comprueba que es el mismo y confirma en el aparato viejo. Si
-   alguien se hubiera metido en medio, los números no coincidirían.
+1. El aparato ya emparejado abre un buzón de emparejamiento en el servidor (caduca en
+   pocos minutos) con su llave pública X25519 (A) y enseña un código corto. Willy lo
+   teclea en el aparato nuevo.
+2. El aparato nuevo genera su par X25519 (B) y un número aleatorio secreto (Nb), y deja
+   en el buzón B y un **compromiso**: la huella `SHA-256(B ‖ Nb)`, que fija Nb sin
+   enseñarlo.
+3. El aparato viejo recoge B y el compromiso, y solo entonces publica su propio número
+   aleatorio (Na). Después el nuevo desvela Nb, y el viejo comprueba que corresponde al
+   compromiso.
+4. Los dos aparatos enseñan un **número de seis cifras** calculado a partir de las dos
+   llaves y los dos números (`HKDF(A ‖ B ‖ Na ‖ Nb)`). Willy comprueba que es el mismo y
+   confirma en el aparato viejo, que cifra la `masterKey` hacia B y la deja en el buzón.
+   El nuevo la recoge junto con su token de servidor.
+
+Si alguien se hubiera metido en medio —también el propio servidor—, los números no
+coincidirían. El compromiso es lo que lo garantiza: sin él, quien controla el servidor
+podría probar llaves falsas hasta dar con una que diera las mismas seis cifras (en un
+millón de intentos le basta); con él, cada lado fija lo suyo antes de ver lo del otro y
+le queda **una** oportunidad entre un millón. El servidor obliga a ese orden. El detalle
+byte a byte y los vectores de prueba están en el contrato del servidor
+(`clipboard-sync-server/docs/api.md`, «Protocolo de los clientes»).
 
 Vale para N aparatos: móvil, tablet, Mac y Ubuntu son emparejamientos independientes.
 
@@ -198,7 +212,9 @@ uno:
 1. El servidor deja de aceptar su token.
 2. Un aparato que sigue de alta genera una `masterKey` nueva, vuelve a cifrar todos los
    registros y las imágenes, y la reparte a los demás por el mismo mecanismo del §7.2.
-3. El servidor borra lo cifrado con la llave vieja.
+3. El aparato que rota vuelve a subir todo con la llave nueva, **también las marcas de
+   borrado**, y después pide al servidor `POST /changes/purge` hasta el último `seq` de la
+   llave vieja: así no queda nada cifrado con ella.
 
 Con solo favoritos es barato.
 
@@ -222,13 +238,25 @@ La única red es una copia de la `masterKey`:
 Un buzón tonto y **append-only**. No fusiona: no puede, solo tiene datos cifrados.
 
 ```
-POST /changes          → sube un lote de registros cifrados; el servidor asigna `seq`
-GET  /changes?since=N  → devuelve los registros con seq > N, en orden
-PUT  /blobs/:blobId    → sube los bytes cifrados de una imagen (idempotente)
-GET  /blobs/:blobId    → los descarga
-POST /pairing          → buzón de emparejamiento (§7.2), con caducidad
-DELETE /devices/:id    → da de baja un aparato (§7.3)
+POST /bootstrap               → da de alta el primer aparato con el código de arranque
+POST /changes                 → sube un lote de registros cifrados; el servidor asigna `seq`
+GET  /changes?since=N         → devuelve los registros con seq > N, en orden
+POST /changes/purge           → tras rotar la llave (§7.3), borra lo que quedó con la vieja
+PUT  /blobs/:blobId           → sube los bytes cifrados de una imagen (idempotente)
+GET  /blobs/:blobId           → los descarga
+POST /pairing                 → abre el buzón de emparejamiento (§7.2), con caducidad
+POST /pairing/join            → el aparato nuevo se une: su llave y su compromiso
+GET  /pairing/:id             → el viejo consulta el buzón
+POST /pairing/:id/nonce       → el viejo publica su número aleatorio
+POST /pairing/:id/reveal      → el nuevo desvela el suyo
+POST /pairing/:id/approve     → el viejo aprueba y deja la llave cifrada
+POST /pairing/:id/claim       → el nuevo sondea y recoge llave y token
+DELETE /pairing/:id           → el viejo cancela
+GET  /devices                 → lista los aparatos
+DELETE /devices/:id           → da de baja un aparato (§7.3); nunca el último de alta
 ```
+
+El contrato completo, con cada campo y cada error, es `clipboard-sync-server/docs/api.md`.
 
 - **Dónde corre:** un contenedor Docker en el Ubuntu de casa, **no** en la máquina
   virtual de los agentes.
