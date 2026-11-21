@@ -1,6 +1,6 @@
 ---
 dominio: popover
-actualizado: 2026-11-12
+actualizado: 2026-11-21
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
@@ -42,9 +42,12 @@ nativo de clic derecho y la ventana About.
 - Las filas gestionan su propio cursor (`pointingHand`) y su hover.
 - Entre la cabecera y los chips de grupo hay un **buscador** (`searchField`) atado a
   `store.searchQuery`: filtra por los tres campos de texto del item (contenido,
-  título y nota) sin acentos ni mayúsculas. No se persiste.
+  título y nota) sin acentos ni mayúsculas; de un item protegido, solo título y nota
+  (su contenido va cifrado). No se persiste.
 - Una fila **protegida** enseña `item.displayLine` (el título, en cursiva, con un
-  candado), nunca `textLine`. Pegarla o abrir su editor pasa por `ProtectedAccess`.
+  candado), nunca `textLine`. Pegarla o abrir su editor pasa por
+  `ProtectedAccess.reveal`, que entrega a `PopoverActions` una copia con el texto
+  descifrado.
 - La pestaña Texto lleva un **pie fijo** «Nueva contraseña» (`newPasswordBar`) que abre
   el modal de creación (ver [edicion-item](../edicion-item/_dominio.md)).
 - Texto e Imágenes se pintan con `splitList`: **dos paneles con scroll propio**

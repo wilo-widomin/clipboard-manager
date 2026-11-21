@@ -361,15 +361,17 @@ public struct PopoverRootView: View {
     /// Pegar y editar son las dos acciones que **revelan** el contenido, así que
     /// en un item protegido pasan por la autenticación (con su ventana de
     /// gracia). Favorito, grupo y borrar no enseñan nada y van directos.
+    /// `reveal` entrega al anfitrión una copia del item con el texto ya
+    /// descifrado: el del almacén sigue cifrado.
     private func paste(_ item: ClipboardItem) {
-        ProtectedAccess.run(for: item, reason: "copiar un elemento protegido") {
-            actions.selectItem(item)
+        ProtectedAccess.reveal(item, reason: "copiar un elemento protegido") { revealed in
+            actions.selectItem(revealed)
         }
     }
 
     private func edit(_ item: ClipboardItem) {
-        ProtectedAccess.run(for: item, reason: "abrir un elemento protegido") {
-            actions.editDetail(item)
+        ProtectedAccess.reveal(item, reason: "abrir un elemento protegido") { revealed in
+            actions.editDetail(revealed)
         }
     }
 

@@ -25,7 +25,16 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
 
     /// The text content (nil for image items). Mutable because the right-click
     /// editor lets the user rewrite what was captured.
+    ///
+    /// **`nil` también en un item protegido**: su texto va cifrado en
+    /// `sealedText` y solo se obtiene en claro con `ProtectedAccess.reveal`.
     public var textContent: String?
+
+    /// Texto de un item protegido, cifrado con la `protectedKey` (formato en
+    /// `ProtectedTextCipher`, en base64). `nil` en todo lo demás. Opcional para
+    /// que los `store.json` anteriores decodifiquen; un item protegido antiguo
+    /// llega con `textContent` en claro y `ClipboardStore.load()` lo cifra.
+    public var sealedText: String? = nil
 
     /// Filename of the PNG file on disk, relative to the images directory.
     /// Example: "E621F1A2-4B3C-4D5E-8F9A-0B1C2D3E4F5F.png"
@@ -51,7 +60,8 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     /// Protected items hide their captured text: the list shows `title`, and
     /// opening the editor or pasting the item asks for the macOS user password
     /// / Touch ID first. Text items only — an image reveals itself in its own
-    /// thumbnail, so hiding its text would protect nothing.
+    /// thumbnail, so hiding its text would protect nothing. Su texto vive en
+    /// `sealedText`, cifrado.
     public var isProtected: Bool = false
 
     /// Whether the item carries a non-empty detail note.
@@ -177,6 +187,7 @@ extension ClipboardItem {
         detail = try container.decodeIfPresent(String.self, forKey: .detail)
         title = try container.decodeIfPresent(String.self, forKey: .title)
         isProtected = try container.decodeIfPresent(Bool.self, forKey: .isProtected) ?? false
+        sealedText = try container.decodeIfPresent(String.self, forKey: .sealedText)
     }
 }
 

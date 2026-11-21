@@ -10,6 +10,8 @@ archivos:
   - Sources/ClipboardManagerKit/Security/LocalKey.swift
   - Sources/ClipboardManagerKit/Security/FileCipher.swift
   - Sources/ClipboardManagerKit/Security/QuickLookTemporaryFiles.swift
+  - Sources/ClipboardManagerKit/Security/ProtectedKey.swift
+  - Sources/ClipboardManagerKit/Security/ProtectedTextCipher.swift
   - Sources/ClipboardManagerKit/UI/PopoverActions.swift
   - ClipboardManager.xcodeproj/project.pbxproj
   - scripts/build-release.sh
@@ -69,9 +71,10 @@ NSPasteboard → ClipboardMonitor → ClipboardStore (@Published) → SwiftUI en
 ## Datos cifrados en disco
 
 `store.json`, `groups.json` y cada archivo de `images/` se guardan cifrados. En
-memoria todo va en claro: el cifrado vive solo en el borde con el disco
-(`JSONPersistenceService` para los JSON, `ImageStorage` para las imágenes), así que
-buscador, filas y editor no saben nada de él.
+memoria todo va en claro —salvo el texto de los items protegidos, ver la sección
+siguiente—: el cifrado vive solo en el borde con el disco (`JSONPersistenceService`
+para los JSON, `ImageStorage` para las imágenes), así que buscador, filas y editor no
+saben nada de él.
 
 - **Formato** (`Security/FileCipher.swift`): `"CLPE"` (4 bytes) + versión (1 byte,
   hoy `0x01`) + `AES.GCM.SealedBox.combined` (nonce aleatorio de 12 bytes + cifrado +
@@ -112,6 +115,65 @@ buscador, filas y editor no saben nada de él.
 lleve el disco). No protege frente a quien tenga delante el Mac desbloqueado con la
 sesión de Willy. Las copias de Time Machine y las instantáneas de APFS anteriores a la
 migración siguen teniendo el historial en claro: cifrar ahora no las reescribe.
+
+## Texto protegido con su propia llave
+
+El texto de un item protegido se cifra **otra vez**, dentro del `store.json` ya
+cifrado, con la `protectedKey` (§3.2 del blueprint). En memoria tampoco está en claro:
+el item lleva `textContent = nil` y el texto en `sealedText`. Solo
+`ProtectedAccess.reveal` lo descifra, en una copia, tras autenticar.
+
+- **Par de llaves, no una sola** (`Security/ProtectedKey.swift`): la `protectedKey` es
+  un par X25519; la privada son 32 bytes aleatorios. Cifrar usa la pública y no pide
+  nada, así que proteger, crear una contraseña protegida y migrar no piden el dedo.
+  Descifrar usa la privada, que solo se saca del Llavero tras autenticar.
+- **Cifrado** (`Security/ProtectedTextCipher.swift`): llave efímera X25519 por
+  cifrado, HKDF-SHA256 (sal = pública efímera ‖ pública de destino) y AES-256-GCM.
+  Formato `"CLPP"` + versión `0x01` + pública efímera (32) + `combined`, en base64; la
+  cabecera y la efímera van como dato autenticado.
+- **Dónde vive cada parte**: las dos con servicio fijo
+  `com.widomin.clipboard-manager.protected-key`. La pública (cuenta
+  `protectedPublicKey`) en el llavero de sesión, sin control: no es secreta. La privada
+  (cuenta `protectedKey`) se intenta guardar en el **llavero de protección de datos con
+  `SecAccessControl` `.userPresence`**; si la build no tiene el entitlement
+  (`errSecMissingEntitlement`, -34018), cae al **llavero de sesión sin control de
+  presencia**. Al leer se mira primero el de protección de datos y después el de sesión.
+- **Qué impone macOS y qué impone la app.** El llavero de sesión no admite
+  `kSecAttrAccessControl` (lo ignora), y el de protección de datos exige el
+  entitlement `keychain-access-groups`, que en macOS solo vale con un perfil de
+  aprovisionamiento. `build-release.sh` firma sin perfil, así que **hoy la privada está
+  en el llavero de sesión y quien exige Touch ID es la app** (`ProtectedAccess` llama a
+  `evaluatePolicy` antes de leerla). El sistema solo impone lo mismo que con la
+  `localKey`: sesión abierta y lista de acceso atada a la firma. Lo que sí se gana hoy:
+  el texto protegido no está en claro en memoria (salvo al pegar o con el editor
+  abierto), ni en un `store.json` descifrado con la `localKey`; y la llave privada solo
+  está en memoria los 15 minutos de la ventana de gracia. Con una build firmada con
+  perfil y la capacidad «Keychain Sharing», las llaves **nuevas** quedarían bajo
+  `.userPresence` impuesto por macOS; una llave ya creada en el llavero de sesión no se
+  mueve sola (pendiente).
+- **Una sola autenticación**: `ProtectedAccess.authenticate` evalúa
+  `deviceOwnerAuthentication` y pasa ese mismo `LAContext` (`kSecUseAuthenticationContext`)
+  a la lectura de la privada, para que el llavero de protección de datos no vuelva a
+  preguntar.
+- **Ventana de gracia**: la privada se queda en `ProtectedKey` mientras dura; al
+  cumplirse los 15 minutos (`asyncAfter(wallDeadline:)`, que cuenta también el tiempo
+  dormido, y comprobación en cada `isUnlocked`) se olvida.
+- **Nunca se pierde texto**: no se crea un par nuevo si ya hay algún `sealedText`
+  (`keyMissingButSealedTextExists`); no se cifra hacia una pública cuya privada no
+  aparece en ningún llavero (comprobado solo con atributos, sin pedir el dedo); el par
+  se crea privada primero y pública después, y se relee la pública. Si no hay llave, no
+  se protege ni se crea nada protegido, y la migración deja el texto como estaba.
+- **Migración**: `ClipboardStore.adoptInitialState` (también vía `load()`) cifra en
+  memoria los items protegidos con texto en claro y escribe una vez con `persist()`
+  (escritura atómica): morir a mitad deja el archivo anterior intacto.
+- **Dos anfitriones**: si uno tuviera el entitlement y el otro no, el segundo no vería
+  una privada creada en el llavero de protección de datos y no podría revelar (no
+  pierde nada). Hoy ninguno lo tiene.
+- **Sincronización (§6, sin hacer)**: la `protectedKey` no sale del aparato, así que
+  un `sealedText` no se puede leer en otro. Al sincronizar habrá que decidir si el texto
+  protegido viaja descifrado y recifrado con la llave del sync (exige autenticar en el
+  aparato que lo sube) o cifrado hacia la pública de cada aparato (el par X25519 lo
+  permite).
 
 **Dos anfitriones, una carpeta.** `JSONPersistenceService()` e `ImageStorage` fijan
 la ruta `~/Library/Application Support/ClipboardManager/` sin depender del bundle id,
@@ -183,4 +245,6 @@ propio precisamente para poder inyectarlo en tests cuando se escriban.
   no se pierde nada.
 - Borrar a mano el elemento `com.widomin.clipboard-manager.local-key` del Llavero deja
   los datos ilegibles para siempre: la app se negará a arrancar en vez de crear otra.
+  Lo mismo con `com.widomin.clipboard-manager.protected-key` para los textos
+  protegidos: la app arranca, pero no puede revelarlos ni protege nada nuevo.
 - Preferencias sueltas en `UserDefaults`: `viewMode`, `popoverWidth`, `popoverHeight`.
