@@ -85,5 +85,5 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 
 | Inicio | Fin | Agente | Modelo | Encargo | Resultado |
 |---|---|---|---|---|---|
-| 2026-11-22 13:23 | — | `url-usuario-mac` | Opus | Mac: campos URL y Usuario en los protegidos, visibles y buscables, con su marca de sincronización, botones de copiar usuario y abrir URL, casos de prueba de fusión. Rama propia. | en curso |
+| 2026-11-22 13:23 | 2026-11-22 13:29 | `url-usuario-mac` | Opus | Mac: campos URL y Usuario en los protegidos, visibles y buscables, con su marca de sincronización, botones de copiar usuario y abrir URL, casos de prueba de fusión. Rama propia. | Hecho y mezclado; sin compilar. 22 casos de fusión comprobados con la referencia en Python. |
 | 2026-11-22 13:23 | 2026-11-22 13:26 | `url-usuario-android` | Sonnet | Android: lo mismo, con migración de la base sin perder datos. Rama `feat/url-usuario`. | Hecho y subido en su rama: compila y pasan los tests. La migración de la base (versión 1→2) no se ha probado en un aparato. |
