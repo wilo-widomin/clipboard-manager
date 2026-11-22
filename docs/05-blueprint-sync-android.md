@@ -291,6 +291,11 @@ estando fuera:
 - **Autenticación mutua** antes de intercambiar nada: reto-respuesta con una llave
   `peerAuthKey` derivada por HKDF de la `masterKey`. Un tercero en la misma wifi no puede
   leer (los registros van cifrados como al servidor) ni hacerse pasar por uno de los dos.
+- **No depende del servidor ni de internet.** El Mac y el móvil se sincronizan entre ellos
+  aunque ninguno de los dos llegue al servidor; cuando el Mac vuelva a tener VPN, subirá lo
+  que trajo del móvil. *(Willy, 22-11-2026.)*
+- **Por eso el emparejamiento también tiene que poder hacerse por este puente**, con el
+  mismo protocolo de compromiso y seis cifras del §7.2, sin pasar por el servidor.
 - Después, el Mac sube al servidor por la VPN lo que trajo del móvil.
 - **El móvil en casa** también puede sincronizar por cable con el Ubuntu:
   `adb reverse tcp:<p> tcp:<puerto del servidor>` y la app habla con el servidor como si
