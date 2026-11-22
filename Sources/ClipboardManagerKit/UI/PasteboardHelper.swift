@@ -59,6 +59,16 @@ public enum PasteboardHelper {
         pasteAfterReactivating(target)
     }
 
+    /// Solo copia el texto al portapapeles, sin pegarlo ni reactivar nada (el
+    /// botón «Copiar el usuario» de la fila de una contraseña). Copia normal:
+    /// el usuario no es secreto, así que el monitor lo recoge en el historial
+    /// como cualquier otra copia.
+    public static func copy(text: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+    }
+
     /// Copies an image to the pasteboard and pastes it into `target`.
     public static func copyAndPaste(image: NSImage, reactivating target: NSRunningApplication?) {
         let pb = NSPasteboard.general

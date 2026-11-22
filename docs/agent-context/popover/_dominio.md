@@ -1,6 +1,6 @@
 ---
 dominio: popover
-actualizado: 2026-11-21
+actualizado: 2026-11-22
 archivos:
   - src/ClipboardManager/MenuUI/StatusItemController.swift
   - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
@@ -29,6 +29,9 @@ nativo de clic derecho y la ventana About.
   solo cuando es dueño de la ventana.
 - `PopoverSize` — tamaño persistido y acotado (ver [redimensionar](redimensionar.md)).
 - Filas: `ClipboardTextRow`, `ClipboardImageRow`, más `DetailIndicator` y el menú 📁.
+  La fila de un item protegido enseña además el usuario bajo el título (pequeño,
+  secundario) y, si los hay, dos botones: copiar el usuario y abrir la URL en el
+  navegador (ver [edicion-item](../edicion-item/_dominio.md)).
 
 ## Invariantes
 

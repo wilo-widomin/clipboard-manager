@@ -7,6 +7,7 @@
     "Marca ausente en un item = {createdAt de ese item, deviceId ''}; en un grupo = {0, ''}. El resultado de fusionar dos versiones lleva todas las marcas explícitas.",
     "Si cualquiera de los dos lados tiene deletion, el resultado es un tombstone: solo id, contentType, createdAt (la mayor) y la deletion mayor.",
     "textContent, sealedText e isProtected son un solo campo: los tres se toman del lado que gana la marca content. La marca protection del resultado es la mayor de las dos y no decide nada.",
+    "url y username son campos independientes, cada uno con su marca: no van con content.",
     "Campos ausentes valen: isFavorite false, isProtected false, isFilterEnabled false, el resto null/vacío. Compara normalizando así."
   ],
   "deviceIds": {
@@ -76,6 +77,14 @@
               "deviceId": ""
             },
             "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
               "updatedAt": 1700000000000,
               "deviceId": ""
             }
@@ -149,6 +158,14 @@
             "group": {
               "updatedAt": 1700000000000,
               "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
             }
           }
         }
@@ -218,6 +235,14 @@
               "deviceId": ""
             },
             "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
               "updatedAt": 1700000000000,
               "deviceId": ""
             }
@@ -292,6 +317,14 @@
               "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
             },
             "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
               "updatedAt": 1700000000000,
               "deviceId": ""
             }
@@ -380,6 +413,14 @@
             "group": {
               "updatedAt": 1700000000000,
               "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
             }
           }
         }
@@ -464,6 +505,14 @@
               "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
             },
             "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
               "updatedAt": 1700000000000,
               "deviceId": ""
             }
@@ -627,6 +676,14 @@
             "group": {
               "updatedAt": 1700000200000,
               "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
             }
           }
         }
@@ -699,6 +756,14 @@
             "group": {
               "updatedAt": 1700000100000,
               "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
             }
           }
         }
@@ -761,6 +826,14 @@
             "group": {
               "updatedAt": 1700000000000,
               "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
             }
           }
         }
@@ -815,6 +888,14 @@
               "deviceId": ""
             },
             "group": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000200000,
+              "deviceId": ""
+            },
+            "username": {
               "updatedAt": 1700000200000,
               "deviceId": ""
             }
@@ -873,6 +954,347 @@
           "deletion": {
             "updatedAt": 1700000100000,
             "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "URL en un lado y usuario en el otro a la vez: se conservan los dos",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "url": {
+              "updatedAt": 1700000000100,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          },
+          "url": "banco.es"
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "username": {
+              "updatedAt": 1700000000200,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          },
+          "username": "willy"
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000100,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "username": {
+              "updatedAt": 1700000000200,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          },
+          "url": "banco.es",
+          "username": "willy"
+        }
+      ]
+    },
+    {
+      "name": "URL y usuario: en cada campo gana la marca más reciente, aunque sea de lados distintos",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "url": {
+              "updatedAt": 1700000000100,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "username": {
+              "updatedAt": 1700000000300,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          },
+          "url": "banco.es",
+          "username": "willy.nuevo"
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "url": {
+              "updatedAt": 1700000000200,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "username": {
+              "updatedAt": 1700000000150,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          },
+          "url": "https://banco.es/entrar",
+          "username": "willy.viejo"
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000200,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "username": {
+              "updatedAt": 1700000000300,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          },
+          "url": "https://banco.es/entrar",
+          "username": "willy.nuevo"
+        }
+      ]
+    },
+    {
+      "name": "vaciar el usuario más tarde gana a ponerlo antes",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "username": {
+              "updatedAt": 1700000000100,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            }
+          },
+          "username": "willy"
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "username": {
+              "updatedAt": 1700000000200,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "content": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "detail": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "title": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "protection": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "group": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "url": {
+              "updatedAt": 1700000000000,
+              "deviceId": ""
+            },
+            "username": {
+              "updatedAt": 1700000000200,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "el borrado gana a una edición posterior de la URL y el usuario",
+      "local": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000000100,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+          }
+        }
+      ],
+      "remote": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "isProtected": true,
+          "sealedText": "CLPP-sellado",
+          "title": "Banco",
+          "isFavorite": true,
+          "stamps": {
+            "favorite": {
+              "updatedAt": 1700000000010,
+              "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
+            },
+            "url": {
+              "updatedAt": 1700000000500,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            },
+            "username": {
+              "updatedAt": 1700000000500,
+              "deviceId": "BBBBBBBB-0000-4000-8000-000000000002"
+            }
+          },
+          "url": "banco.es",
+          "username": "willy"
+        }
+      ],
+      "expected": [
+        {
+          "id": "10000000-0000-4000-8000-000000000020",
+          "contentType": "text",
+          "createdAt": 1700000000000,
+          "deletion": {
+            "updatedAt": 1700000000100,
+            "deviceId": "AAAAAAAA-0000-4000-8000-000000000001"
           }
         }
       ]

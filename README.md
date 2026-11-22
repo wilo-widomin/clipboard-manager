@@ -78,14 +78,17 @@ clipboard-manager/
   imágenes solo la nota). Cada item tiene su propia ventana: si ya está abierta, vuelve
   al frente. Guardar cualquier cambio real (texto, nota, título o protección) lo marca
   como favorito. Las filas con nota muestran un icono 📝 con la nota como tooltip
-- ✅ Buscador sobre las listas: filtra por el texto, el título y la nota, sin distinguir
+- ✅ Buscador sobre las listas: filtra por el texto, el título, la nota, la URL y el
+  usuario, sin distinguir
   mayúsculas ni acentos. No se guarda entre arranques
 - ✅ Items protegidos (solo texto): en la lista se ve un título con un candado en lugar
   del contenido, y para pegarlos o abrir su editor pide Touch ID o la contraseña del
   Mac (sin volver a preguntar durante 15 minutos). Su texto va cifrado con una llave
   propia. Hoy quien exige Touch ID es la app, no macOS: eso queda pendiente de firmar
   con un perfil de aprovisionamiento. Al pegar uno, se marca como oculto, no sale del
-  Mac y el portapapeles se vacía a los 30 segundos
+  Mac y el portapapeles se vacía a los 30 segundos. Pueden llevar **usuario y URL**
+  (sin Touch ID): la fila enseña el usuario bajo el título, con un botón para copiarlo
+  y otro para abrir la URL en el navegador
 - ✅ Datos cifrados en disco: `store.enc`, `groups.enc`, las imágenes y los archivos de
   tombstones van cifrados con AES-256-GCM; la clave vive en el Llavero de macOS. Las
   copias de Time Machine anteriores al 21-11-2026 aún guardan el historial en claro
@@ -93,7 +96,7 @@ clipboard-manager/
   lo copiado mientras uno (Acceso a Llaveros, Contraseñas, 1Password, Bitwarden…) está
   al frente
 - ✅ Contraseñas creadas a mano: el botón «+ Nueva contraseña» al pie de la pestaña
-  Texto abre un modal con título, contraseña, detalle, grupo y «Protegida». Incluye un
+  Texto abre un modal con título, usuario, URL, contraseña, detalle, grupo y «Protegida». Incluye un
   generador (largo de 8 a 64, mayúsculas, minúsculas, números, símbolos y símbolos
   extra, que se recuerdan). Se guarda como favorito, así que el límite no la borra
 - ✅ UI en un popover SwiftUI con pestañas Texto / Imágenes / Grupos

@@ -301,4 +301,120 @@ final class ClipboardStoreSyncTests: XCTestCase {
         XCTAssertEqual(groups[0].effectiveNameStamp, SyncStamp.legacyGroup)
         XCTAssertFalse(groups[0].isDeleted)
     }
+
+    // MARK: - URL y usuario de las contraseñas
+
+    @MainActor
+    func testURLAndUsernameStampOnlyWhatChanged() async {
+        let store = await makeStore(MemoryPersistence())
+        store.add(.text("clave"))
+        let id = store.items[0].id
+        XCTAssertFalse(store.items[0].isFavorite)
+
+        // Solo el usuario: se marca el usuario y nada más (salvo la estrella).
+        store.setURLAndUsername(id: id, url: "  ", username: "  willy  ")
+        XCTAssertEqual(store.items[0].username, "willy")
+        XCTAssertNil(store.items[0].url)
+        XCTAssertEqual(store.items[0].stamps.username?.deviceId, device)
+        XCTAssertNil(store.items[0].stamps.url)
+        XCTAssertNil(store.items[0].stamps.content)
+        XCTAssertNil(store.items[0].stamps.title)
+        XCTAssertNil(store.items[0].stamps.detail)
+        // Un cambio real lo hace favorito.
+        XCTAssertTrue(store.items[0].isFavorite)
+        XCTAssertEqual(store.items[0].stamps.favorite?.deviceId, device)
+
+        // Solo la URL: la marca del usuario no se mueve.
+        let usernameStamp = store.items[0].stamps.username
+        store.setURLAndUsername(id: id, url: "banco.es", username: "willy")
+        XCTAssertEqual(store.items[0].url, "banco.es")
+        XCTAssertEqual(store.items[0].stamps.url?.deviceId, device)
+        XCTAssertEqual(store.items[0].stamps.username, usernameStamp)
+
+        // Sin cambios no se marca nada.
+        let stamps = store.items[0].stamps
+        store.setURLAndUsername(id: id, url: " banco.es ", username: "willy")
+        XCTAssertEqual(store.items[0].stamps, stamps)
+
+        // Vaciar deja `nil`.
+        store.setURLAndUsername(id: id, url: "", username: "willy")
+        XCTAssertNil(store.items[0].url)
+    }
+
+    @MainActor
+    func testSavingSameURLAndUsernameDoesNotMakeFavourite() async {
+        let store = await makeStore(MemoryPersistence())
+        store.add(.text("clave"))
+        let id = store.items[0].id
+        store.setURLAndUsername(id: id, url: "", username: "")
+        XCTAssertFalse(store.items[0].isFavorite)
+        XCTAssertNil(store.items[0].stamps.favorite)
+    }
+
+    @MainActor
+    func testSearchFindsByUsernameAndURLAlsoWhenProtected() async {
+        let store = ClipboardStore(
+            persistence: MemoryPersistence(), deviceId: device, textSealer: { "sellado:" + $0 }
+        )
+        await store.load()
+        let id = store.addManual(
+            title: "Banco", text: "secreta", detail: "", groupID: nil, isProtected: true,
+            url: " https://banco.es/entrar ", username: " willy.cuenta "
+        )
+        XCTAssertNotNil(id)
+        let item = store.items[0]
+        XCTAssertEqual(item.url, "https://banco.es/entrar")
+        XCTAssertEqual(item.username, "willy.cuenta")
+        XCTAssertNil(item.stamps.url)
+        XCTAssertNil(item.stamps.username)
+
+        store.searchQuery = "WILLY.CUENTA"
+        XCTAssertTrue(store.matchesSearch(item))
+        store.searchQuery = "banco.es/entrar"
+        XCTAssertTrue(store.matchesSearch(item))
+        // El contenido protegido sigue sin buscarse.
+        store.searchQuery = "secreta"
+        XCTAssertFalse(store.matchesSearch(item))
+    }
+
+    @MainActor
+    func testTombstoneDropsURLAndUsername() async {
+        let store = await makeStore(MemoryPersistence())
+        store.add(.text("clave"))
+        let id = store.items[0].id
+        store.setURLAndUsername(id: id, url: "banco.es", username: "willy")
+        store.remove(id: id)
+        XCTAssertEqual(store.itemTombstones.count, 1)
+        XCTAssertNil(store.itemTombstones[0].url)
+        XCTAssertNil(store.itemTombstones[0].username)
+    }
+
+    func testOpenableURLAddsSchemeAndRejectsTheRest() {
+        var item = ClipboardItem.text("x")
+        item.url = "banco.es/entrar"
+        XCTAssertEqual(item.openableURL?.absoluteString, "https://banco.es/entrar")
+        item.url = "http://intranet.local:8080/a"
+        XCTAssertEqual(item.openableURL?.absoluteString, "http://intranet.local:8080/a")
+        item.url = "file:///etc/passwd"
+        XCTAssertNil(item.openableURL)
+        item.url = "no es una url"
+        XCTAssertNil(item.openableURL)
+        item.url = nil
+        XCTAssertNil(item.openableURL)
+    }
+
+    func testOldFilesWithoutURLAndUsernameDecode() throws {
+        let json = """
+        [{"id":"10000000-0000-4000-8000-000000000001","contentType":"text",
+          "createdAt":700000000,"textContent":"viejo","title":"Banco",
+          "stamps":{"title":{"updatedAt":700000100,"deviceId":"A"}}}]
+        """
+        let items = try JSONDecoder().decode([ClipboardItem].self, from: Data(json.utf8))
+        XCTAssertNil(items[0].url)
+        XCTAssertNil(items[0].username)
+        XCTAssertNil(items[0].stamps.url)
+        XCTAssertNil(items[0].stamps.username)
+        XCTAssertEqual(items[0].effectiveStamps().url, SyncStamp.legacy(at: items[0].createdAt))
+        XCTAssertEqual(items[0].effectiveStamps().username, SyncStamp.legacy(at: items[0].createdAt))
+    }
 }

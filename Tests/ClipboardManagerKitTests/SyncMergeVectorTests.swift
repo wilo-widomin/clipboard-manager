@@ -72,6 +72,16 @@ final class SyncMergeVectorTests: XCTestCase {
         }
     }
 
+    /// Los vectores de URL y usuario llegan de verdad al modelo: si
+    /// `ClipboardItem` dejara de leer esas claves, los demás tests seguirían en
+    /// verde comparando dos `nil`.
+    func testVectorsCarryURLAndUsername() throws {
+        let vectors = try loadVectors()
+        let expected = vectors.itemCases.flatMap(\.expected)
+        XCTAssertTrue(expected.contains { $0.url != nil && $0.stamps.url != nil })
+        XCTAssertTrue(expected.contains { $0.username != nil && $0.stamps.username != nil })
+    }
+
     /// En los vectores de items el orden de los lados no cambia el resultado:
     /// donde dos marcas empatan del todo, los dos lados tienen el mismo valor.
     /// (Con valores distintos y marcas idénticas ganaría `local`, a propósito;

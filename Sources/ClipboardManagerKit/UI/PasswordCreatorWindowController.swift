@@ -3,7 +3,7 @@
 //  ClipboardManagerKit
 //
 //  Modal «Nueva contraseña»: crea a mano un item de texto que nunca pasó por el
-//  portapapeles, con un generador de contraseñas. Es una ventana propia, como el
+//  portapapeles (con usuario y URL opcionales), con un generador de contraseñas. Es una ventana propia, como el
 //  editor de items, porque tomar el foco dentro del popover lo cerraría.
 //
 
@@ -61,6 +61,8 @@ struct PasswordCreatorView: View {
 
     @State private var title = ""
     @State private var password = ""
+    @State private var username = ""
+    @State private var url = ""
     @State private var note = ""
     @State private var groupID: ClipboardGroup.ID? = nil
     @State private var isProtected = true
@@ -104,6 +106,17 @@ struct PasswordCreatorView: View {
             labeled("Título") {
                 TextField("Lo que se verá en la lista, p. ej. «Wifi oficina»", text: $title)
                     .textFieldStyle(.roundedBorder)
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                labeled("Usuario (opcional)") {
+                    TextField("", text: $username)
+                        .textFieldStyle(.roundedBorder)
+                }
+                labeled("URL (opcional)") {
+                    TextField("p. ej. banco.es", text: $url)
+                        .textFieldStyle(.roundedBorder)
+                }
             }
 
             passwordSection
@@ -237,7 +250,9 @@ struct PasswordCreatorView: View {
             text: password,
             detail: note,
             groupID: groupID,
-            isProtected: isProtected
+            isProtected: isProtected,
+            url: url,
+            username: username
         )
         guard created != nil else {
             saveError = "No se ha podido guardar: no hay llave para cifrar la contraseña protegida. "

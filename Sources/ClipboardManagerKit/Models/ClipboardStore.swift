@@ -95,16 +95,18 @@ public final class ClipboardStore: ObservableObject {
         passesGroupFilter(item) && matchesSearch(item)
     }
 
-    /// Busca en los **tres campos de texto** del item: el contenido capturado,
-    /// el título y la nota. Sin acentos y sin distinguir mayúsculas.
+    /// Busca en los campos de texto del item: el contenido capturado, el
+    /// título, la nota, la URL y el usuario. Sin acentos y sin distinguir
+    /// mayúsculas.
     ///
-    /// Un item protegido se busca **solo por título y nota**: su contenido va
-    /// cifrado y el buscador no tiene la llave (ni debe pedirla en cada tecla).
+    /// Un item protegido se busca **por todo menos el contenido**: su contenido
+    /// va cifrado y el buscador no tiene la llave (ni debe pedirla en cada
+    /// tecla). La URL y el usuario no van cifrados, así que sí cuentan.
     public func matchesSearch(_ item: ClipboardItem) -> Bool {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return true }
         let needle = Self.fold(query)
-        return [item.isProtected ? nil : item.textContent, item.title, item.detail]
+        return [item.isProtected ? nil : item.textContent, item.title, item.detail, item.url, item.username]
             .compactMap { $0 }
             .contains { Self.fold($0).contains(needle) }
     }
@@ -304,6 +306,8 @@ public final class ClipboardStore: ObservableObject {
             incoming.groupID = existing.groupID
             incoming.detail = existing.detail
             incoming.title = existing.title
+            incoming.url = existing.url
+            incoming.username = existing.username
             incoming.isProtected = existing.isProtected
             if let sealed = existing.sealedText {
                 incoming.sealedText = sealed
@@ -552,6 +556,42 @@ public final class ClipboardStore: ObservableObject {
         persist()
     }
 
+    /// Guarda la URL y el usuario de un item de texto (los de una contraseña).
+    /// Cada uno se recorta y, vacío, queda en `nil`. Solo se marca el campo que
+    /// cambia de verdad, y un cambio real hace favorito al item (la misma regla
+    /// que cualquier cambio hecho en el editor); sin cambios no se toca nada.
+    ///
+    /// No piden autenticación ni se cifran con la `protectedKey`: se ven en la
+    /// fila y el buscador los mira, como el título y la nota.
+    public func setURLAndUsername(id: ClipboardItem.ID, url: String, username: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }),
+              items[idx].contentType == .text else { return }
+        let newURL = Self.trimmedOrNil(url)
+        let newUsername = Self.trimmedOrNil(username)
+        let urlChanged = items[idx].url != newURL
+        let usernameChanged = items[idx].username != newUsername
+        guard urlChanged || usernameChanged else { return }
+
+        let stamp = newStamp()
+        if urlChanged {
+            items[idx].url = newURL
+            items[idx].stamps.url = stamp
+        }
+        if usernameChanged {
+            items[idx].username = newUsername
+            items[idx].stamps.username = stamp
+        }
+        markFavouriteIfNeeded(idx: idx, stamp: stamp)
+        items = sort(items)
+        persist()
+    }
+
+    /// El texto recortado, o `nil` si queda vacío.
+    private static func trimmedOrNil(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     /// Hace favorito el item de `idx` si no lo era, sellando solo ese campo.
     /// No reordena: quien llama lo hace después.
     private func markFavouriteIfNeeded(idx: Int, stamp: SyncStamp) {
@@ -588,14 +628,18 @@ public final class ClipboardStore: ObservableObject {
     /// `add`: no es una captura, y no debe fundirse con otro item igual.
     /// Se rechaza (devuelve `nil`) un texto en blanco o, si va protegido, sin
     /// título, por las mismas razones que `setTextContent` y `setProtection`; y
-    /// también, si va protegido, cuando no hay llave para cifrarlo.
+    /// también, si va protegido, cuando no hay llave para cifrarlo. `url` y
+    /// `username` se recortan y, vacíos, quedan en `nil`; nacen sin marca,
+    /// como el resto de campos de un item nuevo.
     @discardableResult
     public func addManual(
         title: String,
         text: String,
         detail: String,
         groupID: ClipboardGroup.ID?,
-        isProtected: Bool
+        isProtected: Bool,
+        url: String = "",
+        username: String = ""
     ) -> ClipboardItem.ID? {
         guard !isPersistenceBlocked else { return nil }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -613,6 +657,8 @@ public final class ClipboardStore: ObservableObject {
         item.title = trimmedTitle.isEmpty ? nil : trimmedTitle
         let note = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         item.detail = note.isEmpty ? nil : note
+        item.url = Self.trimmedOrNil(url)
+        item.username = Self.trimmedOrNil(username)
         if let groupID = groupID, groups.contains(where: { $0.id == groupID }) {
             item.groupID = groupID
         }

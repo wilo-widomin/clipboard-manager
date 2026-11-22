@@ -116,12 +116,12 @@ live in the status-item right-click menu).
 
 ## Models
 
-- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only), sealedText(optional: texto protegido cifrado; con él `textContent` es nil). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
+- **ClipboardItem**: id, contentType(.text/.image), createdAt, textContent, imageFilename(PNG on disk, cifrado; leer con `ImageStorage.readData`/`loadImage`, nunca con `imageFileURL`), isFavorite, groupID(optional), detail(optional), title(optional), isProtected(bool, text only), sealedText(optional: texto protegido cifrado; con él `textContent` es nil), url(optional) y username(optional) — la dirección web y el usuario de una contraseña: recortados, vacío = nil, **no** van tras Touch ID ni con la `protectedKey` (como título y nota, dentro de `store.enc`). `groupID` and `detail` are optional so older `store.json` files decode cleanly.
 - **ClipboardGroup**: id, name, isFilterEnabled, nameStamp?, deletion?. Persisted separately in `groups.enc`.
 - **Modelo sincronizable** (§6 de `docs/05-blueprint-sync-android.md`, todavía sin red): los
   items llevan además `imageHash?` (SHA-256 en hexadecimal del PNG en claro), `stamps` (una
   marca `(updatedAt, deviceId)` por campo: content = textContent+sealedText+isProtected, detail,
-  title, favorite, protection (solo informativa), group) y `deletion?`. Cada mutación del store marca solo los campos que
+  title, favorite, protection (solo informativa), group, url, username) y `deletion?`. Cada mutación del store marca solo los campos que
   cambian de verdad; una marca ausente es implícita —`(createdAt, "")` en items, `(1970, "")` en
   grupos— y nunca se escribe al cargar. Quitar algo que **es o fue** favorito (borrar, tope,
   vaciar) y borrar cualquier grupo deja un **tombstone** sin contenido en `itemTombstones` /
@@ -136,7 +136,7 @@ live in the status-item right-click menu).
   (lo comparten la app y Widomin). `SyncMerge.merge(local:remote:)` es pura y la fijan los
   vectores de `Tests/vectors/merge-vectors.json`. Detalle en
   `docs/agent-context/historial/_dominio.md`.
-- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title and note; de un item protegido, solo título y nota).
+- **ClipboardStore**: `@Published items` + `@Published groups`. Favourites first (by date desc), then rest (by date desc), with a divider drawn at the boundary. Capped **per content type** — 50 text, 20 images — never globally, and the cap counts **only non-favourites**: favourites are unlimited and don't consume the budget, `cap` evicts the oldest non-favourite of that type (dropping an image deletes its PNG). `visibleItems` filtered by `viewMode`, the per-group checkbox filter (applies to **all** items — see Groups) and the search box (`searchQuery`, matched against text, title, note, url and username; de un item protegido, todo menos el contenido).
 
 ## Groups
 
@@ -184,9 +184,9 @@ live in the status-item right-click menu).
   and, for text items, the content (with protection and title) via `store.setText(id:text:isProtected:title:)` — stored
   verbatim, **rejected if blank** (Guardar is disabled too, so an edit can't leave a
   ghost row), and it touches neither `createdAt` nor the order.
-- **Saving any real change** in the editor (text, note, title or the `Protegido`
-  switch) makes the item a favourite (with its favourite stamp), done in
-  `setText`/`setDetail`. Saving without changes does nothing; removing the star is
+- **Saving any real change** in the editor (text, note, title, URL, username or the
+  `Protegido` switch) makes the item a favourite (with its favourite stamp), done in
+  `setText`/`setDetail`/`setURLAndUsername`. Saving without changes does nothing; removing the star is
   never automatic.
 - Rows show a `note.text` glyph (`DetailIndicator`) when the item has a detail,
   with the note text as tooltip.
@@ -209,14 +209,20 @@ live in the status-item right-click menu).
   impuesto por el sistema si la build tiene el entitlement del llavero de protección de
   datos (perfil de aprovisionamiento). Firmada como hoy, sin perfil, cae al llavero de
   sesión y quien exige Touch ID es la app. Detalle en `docs/agent-context/arquitectura.md`.
-- El buscador **no** mira el contenido de los protegidos (solo título y nota), y la
+- **URL y usuario** (`url`, `username`): el editor de un item protegido tiene los
+  campos «Usuario» y «URL»; guarda con `store.setURLAndUsername(id:url:username:)`, que
+  marca solo el campo que cambia y, con un cambio real, hace favorito. No piden Touch
+  ID: la fila de un protegido enseña el usuario bajo el título (pequeño, secundario) y
+  dos botones, copiar el usuario (copia normal, entra al historial) y abrir la URL en el
+  navegador (`ClipboardItem.openableURL`: añade `https://` si falta; solo http/https).
+- El buscador **no** mira el contenido de los protegidos (sí título, nota, URL y usuario), y la
   deduplicación contra un protegido solo funciona con la ventana de gracia abierta.
 
 ## Contraseñas creadas a mano
 
 - El pie «Nueva contraseña» de la pestaña Texto abre un modal (ventana propia) con
-  título, contraseña, generador, detalle, grupo y `Protegida` (activada por defecto).
-- Guarda con `ClipboardStore.addManual`: un item de texto normal, **favorito** (para
+  título, usuario, URL, contraseña, generador, detalle, grupo y `Protegida` (activada por defecto).
+- Guarda con `ClipboardStore.addManual(…, url:username:)` (los dos opcionales): un item de texto normal, **favorito** (para
   esquivar el tope) y sin deduplicar. No hay tipo aparte. Si va protegida, nace ya
   cifrada; sin llave para cifrarla no se crea y el modal lo dice.
 
