@@ -69,7 +69,7 @@ public final class DetailEditorWindowController: NSObject {
         win.delegate = self
         // Cada item tiene su ventana: nada de agruparlas como pestañas.
         win.tabbingMode = .disallowed
-        win.setContentSize(NSSize(width: 460, height: item.contentType == .text ? 520 : 320))
+        win.setContentSize(NSSize(width: 460, height: item.contentType == .text ? 600 : 320))
         win.center()
 
         self.window = win
@@ -98,6 +98,7 @@ extension DetailEditorWindowController: NSWindowDelegate {
 /// SwiftUI content of the editor: for a text item, the captured text itself and
 /// the note, each in its own multi-line area; for an image item, only the note.
 /// Saving persists both — the note trimmed (empty clears it), the text verbatim.
+/// Un item protegido añade título, usuario y URL.
 struct DetailEditorView: View {
     let itemID: ClipboardItem.ID
     /// Image items have no text to rewrite, so they only get the note area.
@@ -108,6 +109,8 @@ struct DetailEditorView: View {
     @State private var content: String
     @State private var note: String
     @State private var title: String
+    @State private var url: String
+    @State private var username: String
     @State private var isProtected: Bool
     /// Un item protegido enseña su texto como contraseña; el ojo lo destapa
     /// mientras dura la edición (para llegar aquí ya se ha autenticado).
@@ -129,6 +132,8 @@ struct DetailEditorView: View {
         self._content = State(initialValue: item.textContent ?? "")
         self._note = State(initialValue: current.detail ?? "")
         self._title = State(initialValue: current.title ?? "")
+        self._url = State(initialValue: current.url ?? "")
+        self._username = State(initialValue: current.username ?? "")
         self._isProtected = State(initialValue: current.isProtected)
     }
 
@@ -194,6 +199,22 @@ struct DetailEditorView: View {
                 TextField("Lo que se verá en la lista", text: $title)
                     .textFieldStyle(.roundedBorder)
             }
+            // URL y usuario de la cuenta: no van tras Touch ID (se ven en la
+            // fila), así que no hace falta taparlos aquí.
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Usuario")
+                        .font(.headline)
+                    TextField("Opcional", text: $username)
+                        .textFieldStyle(.roundedBorder)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("URL")
+                        .font(.headline)
+                    TextField("Opcional, p. ej. banco.es", text: $url)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
         }
     }
 
@@ -257,6 +278,11 @@ struct DetailEditorView: View {
                 saveError = "No se ha podido guardar: no hay llave para cifrar el texto protegido "
                     + "(o el elemento ya no existe). No se ha cambiado nada."
                 return
+            }
+            // URL y usuario solo se editan con el interruptor puesto; al
+            // desproteger se conservan, como el título.
+            if isProtected {
+                store.setURLAndUsername(id: itemID, url: url, username: username)
             }
         }
         store.setDetail(id: itemID, detail: note)

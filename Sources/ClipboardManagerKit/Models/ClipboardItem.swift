@@ -63,6 +63,18 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
     /// item is protected. Optional so older `store.json` files decode cleanly.
     public var title: String? = nil
 
+    /// Dirección web asociada a una contraseña (p. ej. la página de entrada del
+    /// banco). Pensada para items protegidos, pero no va cifrada con la
+    /// `protectedKey`: se guarda como el título y la nota (dentro de
+    /// `store.enc`, cifrado con la `localKey`), se ve sin Touch ID y el
+    /// buscador la mira. Recortada; vacía es `nil`. Opcional para que los
+    /// `store.enc` anteriores decodifiquen.
+    public var url: String? = nil
+
+    /// Usuario de la cuenta de una contraseña. Mismas reglas que `url`: visible
+    /// sin autenticar, buscable, recortado y `nil` si está vacío.
+    public var username: String? = nil
+
     /// Protected items hide their captured text: the list shows `title`, and
     /// opening the editor or pasting the item asks for the macOS user password
     /// / Touch ID first. Text items only — an image reveals itself in its own
@@ -117,12 +129,15 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
             title: stamps.title ?? implicit,
             favorite: stamps.favorite ?? implicit,
             protection: stamps.protection ?? implicit,
-            group: stamps.group ?? implicit
+            group: stamps.group ?? implicit,
+            url: stamps.url ?? implicit,
+            username: stamps.username ?? implicit
         )
     }
 
     /// El tombstone de este item: conserva `id`, `contentType` y `createdAt` y
-    /// tira todo lo demás (texto, texto cifrado, nota, título, imagen, marcas),
+    /// tira todo lo demás (texto, texto cifrado, nota, título, URL, usuario,
+    /// imagen, marcas),
     /// para que un borrado no deje contraseñas guardadas.
     public func tombstone(_ deletion: SyncStamp) -> ClipboardItem {
         ClipboardItem(
@@ -147,6 +162,22 @@ public struct ClipboardItem: Identifiable, Codable, Sendable {
         guard let title = title else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// La URL lista para abrir en el navegador, o `nil` si no hay o no se
+    /// entiende. Sin esquema se le pone `https://` («banco.es/entrar» →
+    /// «https://banco.es/entrar»). Solo `http` y `https`, y con dominio: el
+    /// botón de la fila no debe abrir archivos locales ni otras apps.
+    public var openableURL: URL? {
+        guard let raw = url?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              !raw.contains(where: { $0.isWhitespace }) else { return nil }
+        let candidate = raw.contains("://") ? raw : "https://" + raw
+        guard let components = URLComponents(string: candidate),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = components.host, !host.isEmpty else { return nil }
+        return components.url
     }
 
     // MARK: - Preview helpers
@@ -263,6 +294,8 @@ extension ClipboardItem {
         groupID = try container.decodeIfPresent(UUID.self, forKey: .groupID)
         detail = try container.decodeIfPresent(String.self, forKey: .detail)
         title = try container.decodeIfPresent(String.self, forKey: .title)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        username = try container.decodeIfPresent(String.self, forKey: .username)
         isProtected = try container.decodeIfPresent(Bool.self, forKey: .isProtected) ?? false
         sealedText = try container.decodeIfPresent(String.self, forKey: .sealedText)
         imageHash = try container.decodeIfPresent(String.self, forKey: .imageHash)

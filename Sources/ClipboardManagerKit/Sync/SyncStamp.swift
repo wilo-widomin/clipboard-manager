@@ -75,6 +75,10 @@ public struct ItemFieldStamps: Codable, Hashable, Sendable {
     public var protection: SyncStamp?
     /// `groupID`.
     public var group: SyncStamp?
+    /// `url` (la dirección web de una contraseña).
+    public var url: SyncStamp?
+    /// `username` (el usuario de una contraseña).
+    public var username: SyncStamp?
 
     public init(
         content: SyncStamp? = nil,
@@ -82,7 +86,9 @@ public struct ItemFieldStamps: Codable, Hashable, Sendable {
         title: SyncStamp? = nil,
         favorite: SyncStamp? = nil,
         protection: SyncStamp? = nil,
-        group: SyncStamp? = nil
+        group: SyncStamp? = nil,
+        url: SyncStamp? = nil,
+        username: SyncStamp? = nil
     ) {
         self.content = content
         self.detail = detail
@@ -90,5 +96,7 @@ public struct ItemFieldStamps: Codable, Hashable, Sendable {
         self.favorite = favorite
         self.protection = protection
         self.group = group
+        self.url = url
+        self.username = username
     }
 }

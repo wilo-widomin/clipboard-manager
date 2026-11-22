@@ -1,6 +1,6 @@
 ---
 dominio: historial
-actualizado: 2026-11-21
+actualizado: 2026-11-22
 archivos:
   - Sources/ClipboardManagerKit/Models/ClipboardItem.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
@@ -27,7 +27,8 @@ persistencia. Es el núcleo: casi cualquier tarea acaba tocando `ClipboardStore`
 - `ClipboardItem` (`Models/ClipboardItem.swift`) — `id`, `contentType` (.text/.image),
   `createdAt`, `textContent` (nil en imágenes **y en los protegidos**; `var`, lo edita
   Willy), `imageFilename` (nombre del PNG, **no** una ruta), `isFavorite`, `groupID?`,
-  `detail?`, `title?`, `isProtected`, `sealedText?` (texto protegido cifrado, ver
+  `detail?`, `title?`, `url?`, `username?` (los de una contraseña; recortados, vacío =
+  `nil`, no cifrados con la `protectedKey`), `isProtected`, `sealedText?` (texto protegido cifrado, ver
   [edicion-item](../edicion-item/_dominio.md)), y los del modelo sincronizable:
   `imageHash?`, `stamps` y `deletion?` (ver «Modelo sincronizable» abajo). Todos los
   campos añadidos son opcionales o con default y se leen con `decodeIfPresent`, para
@@ -84,9 +85,10 @@ que lo use todavía salvo los tests.
   lo lee la primera vez que hace falta una marca.
 - **Marcas por campo** (`SyncStamp`, `ItemFieldStamps`): `(updatedAt, deviceId)` para
   `content` (`textContent` + `sealedText` + `isProtected`, un solo campo), `detail`,
-  `title`, `favorite`, `protection` (solo informativa) y `group`; en grupos, `nameStamp`. `updatedAt` va en
+  `title`, `favorite`, `protection` (solo informativa), `group`, `url` y `username`; en grupos, `nameStamp`. `updatedAt` va en
   milisegundos enteros. Cada mutación del store marca **solo los campos que cambian
   de verdad** (`toggleFavorite`, `setText`/`setTextContent`, `setDetail`,
+  `setURLAndUsername` (cada uno de los dos por separado),
   `assignGroup`, `deleteGroup` en los items del grupo, `renameGroup`). Un item nuevo
   nace sin marcas.
 - **Marca ausente = implícita, calculada al vuelo, nunca escrita al cargar**: en un
@@ -96,7 +98,7 @@ que lo use todavía salvo los tests.
   `effectiveStamps()` las rellena.
 - **Tombstones**: quitar un item que **es o fue favorito** (`leavesTombstone`: favorito,
   o con marca `favorite`) deja `item.tombstone(stamp)` en `itemTombstones`: solo `id`,
-  `contentType`, `createdAt` y `deletion`, sin texto, nota, título ni imagen. Vale para
+  `contentType`, `createdAt` y `deletion`, sin texto, nota, título, URL, usuario ni imagen. Vale para
   `remove`, el tope (`cap`) y los vaciados, todo por `retire(_:)`. El historial que
   nunca fue favorito se borra de verdad, como siempre. Borrar un grupo siempre deja
   tombstone (todos los grupos se sincronizan).
@@ -130,7 +132,8 @@ que lo use todavía salvo los tests.
   empata, `deviceId` byte a byte); con marcas idénticas, `local`; `deletion` gana a
   todo. `textContent`, `sealedText` e `isProtected` se toman juntos del lado que gana
   `content` (proteger o desproteger ya marca `content`), así que nunca sale un item
-  sin proteger con el texto solo cifrado ni uno protegido en claro; la marca
+  sin proteger con el texto solo cifrado ni uno protegido en claro; `url` y
+  `username` son independientes, cada uno con su marca; la marca
   `protection` del resultado es la mayor de las dos y no decide nada. El resultado lleva todas las marcas explícitas; `createdAt` es la mayor;
   `imageFilename` e `isFilterEnabled` son los locales. Las listas salen ordenadas por
   `id`. **No la llama nadie**: la fijan los vectores de `Tests/vectors/merge-vectors.json`,
@@ -159,8 +162,8 @@ que lo use todavía salvo los tests.
 - La deduplicación de imágenes compara los bytes **descifrados**
   (`ImageStorage.readData`). En disco dos copias de la misma imagen nunca coinciden:
   cada escritura lleva un nonce aleatorio.
-- `add` deduplica por contenido y **hereda `id`, marcas, `isFavorite`, `groupID` y
-  `detail`** del duplicado que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el
+- `add` deduplica por contenido y **hereda `id`, marcas, `isFavorite`, `groupID`,
+  `detail`, `title`, `url` y `username`** del duplicado que sustituye. Sin eso, clicar un favorito agrupado (que re-copia y el
   monitor re-lee) le borraba el grupo y la nota escrita en el editor. Un protegido
   también hereda su `sealedText`, y contra un protegido solo se compara con la ventana
   de gracia abierta (sin la llave privada no hay texto que comparar): fuera de ella la

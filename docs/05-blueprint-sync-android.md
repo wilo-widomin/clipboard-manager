@@ -138,7 +138,8 @@ una foto pierden datos: gana el último que sube, y lo borrado en un sitio resuc
 desde otro. Antes de cualquier red hace falta:
 
 - **`updatedAt` por campo mutable**, no por item: `content`, `detail`, `title`,
-  `isFavorite`, `isProtected`, `groupID`. Marcar favorito en el móvil mientras se edita
+  `isFavorite`, `isProtected`, `groupID`, `url` y `username` (la dirección web y el
+  usuario de una contraseña, cada uno con su marca). Marcar favorito en el móvil mientras se edita
   la nota en el Mac conserva las dos cosas.
 - **Marca de origen**: cada cambio lleva `(updatedAt, deviceId)`. `deviceId` desempata
   cuando dos relojes coinciden y hace la fusión determinista.

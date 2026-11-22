@@ -771,16 +771,43 @@ struct ClipboardTextRow: View {
                     .foregroundStyle(.secondary)
                     .help("Protegido: pide autenticación para copiarlo o abrirlo")
             }
-            // Nunca `textLine`: en un item protegido esto enseña el título.
-            Text(item.displayLine)
-                .font(.system(size: 13))
-                .italic(item.isProtected)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // Margen hasta el primer icono; el texto ocupa todo lo demás.
-                .padding(.trailing, 4)
+            VStack(alignment: .leading, spacing: 1) {
+                // Nunca `textLine`: en un item protegido esto enseña el título.
+                Text(item.displayLine)
+                    .font(.system(size: 13))
+                    .italic(item.isProtected)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                // El usuario de una contraseña, debajo del título. No es
+                // secreto (no va tras Touch ID), así que se enseña tal cual.
+                if let username = protectedUsername {
+                    Text(username)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Margen hasta el primer icono; el texto ocupa todo lo demás.
+            .padding(.trailing, 4)
             DetailIndicator(item: item)
+            if let username = protectedUsername {
+                Button { PasteboardHelper.copy(text: username) } label: {
+                    Image(systemName: "person")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Copiar el usuario")
+            }
+            if item.isProtected, let url = item.openableURL {
+                Button { NSWorkspace.shared.open(url) } label: {
+                    Image(systemName: "arrow.up.right.square")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Abrir \(url.absoluteString) en el navegador")
+            }
             groupMenu
             favoriteButton
             Button(action: onDelete) { Image(systemName: "trash") }
@@ -801,6 +828,12 @@ struct ClipboardTextRow: View {
         .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Color.accentColor.opacity(0.15) : .clear))
         .overlay(RightClickCatcher(action: onEditDetail))
         .help("Clic derecho para editar el detalle")
+    }
+
+    /// El usuario, solo en items protegidos (la fila de una contraseña).
+    private var protectedUsername: String? {
+        guard item.isProtected, let username = item.username, !username.isEmpty else { return nil }
+        return username
     }
 
     private var groupMenu: some View {

@@ -27,7 +27,8 @@ import Foundation
 /// Los campos de contenido van juntos: `textContent`, `sealedText` e
 /// `isProtected` son un solo campo (`content`) y se toman los tres del lado que
 /// gana esa marca; la marca `protection` del resultado es la mayor de las dos,
-/// pero no decide nada. `imageHash` no cambia nunca (se toma el de
+/// pero no decide nada. `url` y `username` son campos independientes, cada uno
+/// con su marca. `imageHash` no cambia nunca (se toma el de
 /// `local`, o el de `remote` si `local` no lo tiene); `imageFilename` es un
 /// nombre de archivo local y se conserva el de `local`. `createdAt` es la mayor
 /// de las dos. `isFilterEnabled` de los grupos no se sincroniza: se conserva el
@@ -79,6 +80,10 @@ public enum SyncMerge {
         let protection = winner(l.protection, r.protection, local)
         let group = winner(l.group, r.group, local)
         if group.remoteWins { merged.groupID = remote.groupID }
+        let url = winner(l.url, r.url, local)
+        if url.remoteWins { merged.url = remote.url }
+        let username = winner(l.username, r.username, local)
+        if username.remoteWins { merged.username = remote.username }
 
         merged.stamps = ItemFieldStamps(
             content: content.stamp,
@@ -86,7 +91,9 @@ public enum SyncMerge {
             title: title.stamp,
             favorite: favorite.stamp,
             protection: protection.stamp,
-            group: group.stamp
+            group: group.stamp,
+            url: url.stamp,
+            username: username.stamp
         )
         return merged
     }

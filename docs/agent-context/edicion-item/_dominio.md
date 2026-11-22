@@ -1,6 +1,6 @@
 ---
 dominio: edicion-item
-actualizado: 2026-11-21
+actualizado: 2026-11-22
 archivos:
   - Sources/ClipboardManagerKit/UI/DetailEditorWindowController.swift
   - Sources/ClipboardManagerKit/UI/PasswordCreatorWindowController.swift
@@ -9,6 +9,8 @@ archivos:
   - Sources/ClipboardManagerKit/Security/ProtectedTextCipher.swift
   - Sources/ClipboardManagerKit/Security/PasswordGenerator.swift
   - Sources/ClipboardManagerKit/Models/ClipboardStore.swift
+  - Sources/ClipboardManagerKit/UI/PopoverRootView.swift
+  - Sources/ClipboardManagerKit/UI/PasteboardHelper.swift
 depende_de: [historial/_dominio, popover/_dominio]
 ---
 
@@ -16,7 +18,8 @@ depende_de: [historial/_dominio, popover/_dominio]
 
 El clic derecho sobre una fila abre una ventana donde se reescribe el **texto
 capturado**, se anota un **detalle** libre y se marca el item como **protegido**
-(con el **título** que la lista enseñará en su lugar).
+(con el **título** que la lista enseñará en su lugar y, opcionales, el **usuario** y
+la **URL** de la cuenta).
 
 ## Entidades
 
@@ -34,9 +37,9 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
   llave para cifrar) lo dice en rojo y no cierra.
 - **Guardar un cambio real en el editor hace favorito** al item (`isFavorite` con su
   marca `favorite`; solo se sella lo que cambia de verdad) para que el tope del
-  historial no se lo lleve. Cuenta cualquier cambio de texto, nota, título o
-  «Protegido», en `setText` y en `setDetail` (helper privado
-  `markFavouriteIfNeeded`). Guardar sin cambios no hace nada y quitar la estrella
+  historial no se lo lleve. Cuenta cualquier cambio de texto, nota, título, URL,
+  usuario o «Protegido», en `setText`, `setDetail` y `setURLAndUsername` (helper
+  privado `markFavouriteIfNeeded`). Guardar sin cambios no hace nada y quitar la estrella
   nunca es automático. `addManual` ya nace favorito.
 - `ProtectedAccess` — la puerta: `deviceOwnerAuthentication` (Touch ID o contraseña
   del Mac) con **ventana de gracia de 15 minutos** en memoria. `reveal(_:reason:action:)`
@@ -56,8 +59,8 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
   solo devuelve la vista cuando el evento actual es `.rightMouseDown`, de forma que
   clics izquierdos, botones y hover atraviesan.
 - `PasswordCreatorWindowController` / `PasswordCreatorView` — modal «Nueva contraseña»
-  (ventana propia, como el editor): título, contraseña (tapada, con ojo), generador,
-  detalle, grupo y `Protegida`. Se abre desde el pie de la pestaña Texto y guarda con
+  (ventana propia, como el editor): título, usuario y URL (opcionales), contraseña
+  (tapada, con ojo), generador, detalle, grupo y `Protegida`. Se abre desde el pie de la pestaña Texto y guarda con
   `store.addManual(...)`.
 - `PasswordGenerator` — valor puro: largo 8–64, mayúsculas/minúsculas/números/símbolos
   y «símbolos extra» (se suman a los de serie; con «Símbolos» apagado, solo estos).
@@ -66,8 +69,16 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
   `passwordGeneratorExtraSymbols`); el resto de opciones vuelve a su valor por defecto.
 - Mutaciones: `store.setText(id:text:isProtected:title:)` (lo que usa el editor:
   texto, protección y título de una vez, con el texto en claro en la mano),
-  `store.setDetail(id:detail:)`, y las antiguas `setTextContent(id:text:)` y
+  `store.setDetail(id:detail:)`, `store.setURLAndUsername(id:url:username:)` (solo
+  con «Protegido» puesto; al desproteger se conservan, como el título), y las antiguas `setTextContent(id:text:)` y
   `setProtection(id:isProtected:title:)`, que ahora pasan por `setText`.
+
+- **URL y usuario** (`ClipboardItem.url`, `.username`): recortados, vacío = `nil`, cada
+  uno con su marca (`stamps.url`, `stamps.username`). En la fila de un protegido el
+  usuario sale bajo el título (11 pt, secundario) y hay dos botones: «Copiar el
+  usuario» (`PasteboardHelper.copy(text:)`, copia normal) y abrir la URL
+  (`NSWorkspace.shared.open(item.openableURL)`; `openableURL` añade `https://` si
+  falta y solo admite http/https con dominio, si no el botón no sale).
 
 ## Invariantes
 
@@ -121,9 +132,11 @@ capturado**, se anota un **detalle** libre y se marca el item como **protegido**
   (sin perfil de aprovisionamiento) la llave privada está en el llavero de sesión y es
   la app quien pide el dedo antes de leerla; el sistema solo impone lo mismo que con la
   `localKey`. Ver [arquitectura](../arquitectura.md#texto-protegido-con-su-propia-llave).
-- La **nota** (`detail`) y el **título** de un item protegido no van cifrados con la
-  `protectedKey`, solo con la `localKey` como el resto del archivo: el buscador los
-  necesita.
+- La **nota** (`detail`), el **título**, la **URL** y el **usuario** de un item
+  protegido no van cifrados con la `protectedKey`, solo con la `localKey` como el resto
+  del archivo: el buscador los necesita y la fila los enseña sin Touch ID.
+- «Copiar el usuario» es una copia normal (ni oculta ni local): el monitor la recoge y
+  el usuario entra en el historial como cualquier otra copia.
 - Pegar un item protegido lo marca como oculto en el portapapeles, así que el monitor
   no lo vuelve a capturar. Si Willy copia el mismo texto desde otro sitio con la
   ventana cerrada, entra como item nuevo del historial (no se puede comparar sin la
