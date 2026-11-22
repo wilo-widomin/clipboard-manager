@@ -79,4 +79,4 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 
 | Inicio | Fin | Agente | Modelo | Encargo | Resultado |
 |---|---|---|---|---|---|
-| 2026-11-22 09:38 | — | `script-despliegue` | Sonnet | Scripts para que Willy despliegue el servidor en el Ubuntu con un comando: construir, subir a Forgejo, arrancar por digest, comprobar salud, volver atrás y bloque de Caddy. | en curso |
+| 2026-11-22 09:38 | 2026-11-22 09:40 | `script-despliegue` | Sonnet | Scripts para que Willy despliegue el servidor en el Ubuntu con un comando: construir, subir a Forgejo, arrancar por digest, comprobar salud, volver atrás y bloque de Caddy. | Hecho y subido; comprobado con shellcheck, sin ejecutar (se ejecuta en el Ubuntu). |
