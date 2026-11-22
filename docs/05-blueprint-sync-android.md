@@ -274,6 +274,32 @@ El contrato completo, con cada campo y cada error, es `clipboard-sync-server/doc
 - **Cuándo sincroniza un aparato:** al abrir la app, al guardar un cambio y cada pocos
   minutos mientras está abierta. Sin avisos push: no hacen falta en casa.
 
+## 8 bis. Sincronización directa Mac ↔ móvil *(decidido por Willy el 22-11-2026)*
+
+El móvil no tiene VPN y Willy no quiere depender de ella para él; el Mac sí la tiene y
+llega al servidor desde cualquier sitio. Para tener las mismas contraseñas en los dos
+estando fuera:
+
+- **El móvil abre una puerta** (`PeerSyncServer`) mientras la app está en primer plano.
+- **El Mac se conecta a ella** de dos maneras, con el mismo protocolo:
+  - **por cable**: `adb forward tcp:<p> tcp:<p>` y el Mac habla con `127.0.0.1:<p>`;
+  - **por la wifi compartida del móvil**: el Mac va a la puerta de enlace de esa red, que
+    es el propio móvil.
+- **Se intercambian los registros cifrados** del conjunto sincronizado (favoritos, grupos y
+  tombstones) en los dos sentidos y cada lado fusiona con `SyncMerge`. Son pocos: se
+  mandan enteros, sin cursor.
+- **Autenticación mutua** antes de intercambiar nada: reto-respuesta con una llave
+  `peerAuthKey` derivada por HKDF de la `masterKey`. Un tercero en la misma wifi no puede
+  leer (los registros van cifrados como al servidor) ni hacerse pasar por uno de los dos.
+- Después, el Mac sube al servidor por la VPN lo que trajo del móvil.
+- **El móvil en casa** también puede sincronizar por cable con el Ubuntu:
+  `adb reverse tcp:<p> tcp:<puerto del servidor>` y la app habla con el servidor como si
+  estuviera en el propio móvil.
+- Requisitos: depuración USB activada en el móvil (para el cable) y `adb` en el Mac.
+
+Orden: primero servidor, después sincronización de Mac y Android con el servidor, después
+este puente.
+
 ## 9. Las mismas reglas en tres lenguajes
 
 Swift, Kotlin y Rust tienen que cifrar, sellar y fusionar exactamente igual. Se fija un
