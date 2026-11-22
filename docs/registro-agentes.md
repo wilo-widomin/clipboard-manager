@@ -80,3 +80,10 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 | Inicio | Fin | Agente | Modelo | Encargo | Resultado |
 |---|---|---|---|---|---|
 | 2026-11-22 09:38 | 2026-11-22 09:40 | `script-despliegue` | Sonnet | Scripts para que Willy despliegue el servidor en el Ubuntu con un comando: construir, subir a Forgejo, arrancar por digest, comprobar salud, volver atrás y bloque de Caddy. | Hecho y subido; comprobado con shellcheck, sin ejecutar (se ejecuta en el Ubuntu). |
+
+## URL y usuario en las contraseñas (2026-11-22)
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-22 13:23 | — | `url-usuario-mac` | Opus | Mac: campos URL y Usuario en los protegidos, visibles y buscables, con su marca de sincronización, botones de copiar usuario y abrir URL, casos de prueba de fusión. Rama propia. | en curso |
+| 2026-11-22 13:23 | — | `url-usuario-android` | Sonnet | Android: lo mismo, con migración de la base sin perder datos. Rama `feat/url-usuario`. | en curso |
