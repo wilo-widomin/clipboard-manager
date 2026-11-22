@@ -74,3 +74,9 @@ que seguía abierta. Con la 1.10.2 se ve todo bien: no se había perdido nada.
 | Inicio | Fin | Agente | Modelo | Encargo | Resultado |
 |---|---|---|---|---|---|
 | 2026-11-22 09:22 | 2026-11-22 09:22 | `readme-al-dia` | Sonnet | Poner al día el README: cifrado, gestores de contraseñas, editor y favoritos, `swift test`, cómo compila Willy y enlaces a Android y al servidor. Solo `README.md`. | Hecho y mezclado: secciones nuevas de tests, sincronización y proyectos hermanos; sin direcciones ni dominios. |
+
+## Despliegue del servidor (2026-11-22)
+
+| Inicio | Fin | Agente | Modelo | Encargo | Resultado |
+|---|---|---|---|---|---|
+| 2026-11-22 09:38 | — | `script-despliegue` | Sonnet | Scripts para que Willy despliegue el servidor en el Ubuntu con un comando: construir, subir a Forgejo, arrancar por digest, comprobar salud, volver atrás y bloque de Caddy. | en curso |
